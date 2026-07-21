@@ -2,7 +2,7 @@
 
 > **เอกสารข้อกำหนดสถาปัตยกรรม Logic และคู่มือการปฏิบัติงานมาตรฐาน (SOP / WI)**
 > สำหรับระบบบริหารจัดการและค้นหาข้อมูลคำศัพท์สัตวแพทย์ **KAHIS (SA-PDT & SNOMED CT Veterinary Extension)**
-> **เวอร์ชันเอกสาร**: 4.2.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
+> **เวอร์ชันเอกสาร**: 4.3.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
 
 ---
 
@@ -372,3 +372,49 @@ def run():
 
 ### 📌 สรุปสถานะการใช้งาน
 ขณะนี้ระบบ KAHIS Terminology ถูกปรับแต่งสถาปัตยกรรม ให้รองรับการอัปเดตระบบแบบ Zero-Downtime บน Render.com โดยอัตโนมัติเรียบร้อยแล้ว!
+
+
+---
+
+## 11. การเปรียบเทียบผลการค้นหาและโครงสร้างลําดับชั้นกับ Official SNOMED CT Browser (Search Scope & Hierarchy Specification)
+
+### 11.1 สาเหตุความแตกต่างของผลการค้นหา (Search Matches Rationale: 12 vs 506 Matches)
+
+เมื่อค้นหาคำว่า **"fever"**:
+- **Official SNOMED CT Browser**: เจอ **506 รายการ**
+- **KAHIS Terminology App**: เจอ **12 รายการ**
+
+#### เหตุผลทางสถาปัตยกรรม (Design Rationale):
+
+```mermaid
+graph TD
+    subgraph Official SNOMED CT Browser [Official Browser: 350,000+ Concepts]
+        A[ค้นหา 'fever'] --> B[506 Matches]
+        B --> C[รวมโรคการแพทย์มนุษย์ เช่น Hay fever, Drug fever, Mill fever]
+    end
+
+    subgraph KAHIS Terminology App [KAHIS App: 40,306 Target Concepts]
+        D[ค้นหา 'fever'] --> E[12 Matches]
+        E --> F[เน้นโรคสัตวแพทย์โดยตรง เช่น African swine fever, Shar-Pei fever, Bovine ephemeral fever]
+    end
+```
+
+1. **ดัชนีค้นหา (`terms` FTS Index)**: KAHIS ออกแบบให้ตารางค้นหาครอบคลุมเฉพาะ **SA-PDT (Small Animal)** และ **VSCT (Veterinary Extension)** รวม **40,306 รายการ** เพื่อให้สัตวแพทย์ค้นพบโรคสัตว์ได้ตรงจุดทันที โดยไม่โดนคำศัพท์การแพทย์มนุษย์ปะปนขึ้นมานับร้อยรายการ
+2. **ความเร็ว**: การจำกัดขอบเขตช่วยให้ค้นหาได้รวดเร็วเพียง **0.01 - 0.03 วินาที**
+
+---
+
+### 11.2 สาเหตุความแตกต่างของ Parents และ Children (Stated vs Inferred Hierarchy View)
+
+ในภาพตัวอย่าง Concept `Fever (finding)` [SCTID: 386661006]:
+- **Official Browser**: Parent = `Abnormal body temperature (finding)`, Children = `36 รายการ`
+- **KAHIS App**: Parent = `Hyperthermia` [Inactive], Children = `26 รายการ`
+
+#### เหตุผลทางเทคนิค (Technical Rationale):
+
+1. **มุมมอง Stated View vs Inferred View**:
+   - **Stated View (ตามที่ประกาศใน RF2 Release)**: คือสายสัมพันธ์ตามที่ Author ระบุไว้ในไฟล์ Release Snapshot โดยตรง ซึ่งใน Stated View ของ SNOMED CT กำหนดให้ `Fever` เป็นลูกของ `Hyperthermia`
+   - **Inferred View (ตามที่ Description Logic Reasoner คำนวณ)**: Official Browser โดยปกติจะแสดงผลมุมมอง Inferred (ผ่าน Classifier เช่น ELK Reasoner) ซึ่งคำนวณสายสัมพันธ์ใหม่ตาม Attributes (`Interprets -> Body temperature`) จึงย้าย `Fever` ไปขึ้นกับ `Abnormal body temperature (finding)` และคำนวณรวบรวม Children เพิ่มจาก 26 เป็น 36 รายการ
+
+2. **การแสดงผลสถานะ Inactive**:
+   - KAHIS แสดง Parent `Hyperthermia` พร้อมแท็ก **`[Inactive]`** เพื่อให้สัตวแพทย์ทราบถึงประวัติการแมปในอดีตของ SA-PDT ในขณะที่ Official Browser กรอง Inactive Relationships ออกไปในมุมมอง Inferred
