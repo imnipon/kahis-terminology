@@ -132,6 +132,8 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_add_ku_synonym(data)
         elif path == '/api/ku_synonym/delete':
             self.handle_delete_ku_synonym(data)
+        elif path == '/api/admin/import_ku':
+            self.handle_import_ku_synonyms(data)
         elif path == '/api/admin/rebuild':
             # POST /api/admin/rebuild — same as GET (trigger rebuild, stream response)
             self.handle_rebuild_stream()
@@ -181,8 +183,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 pass
 
     def handle_admin_stats(self):
-
-        """GET /api/admin/stats — returns 7 dashboard statistics."""
+        """GET /api/admin/stats — returns rich dashboard statistics."""
         ACTIVE_COND   = "((in_sapdt='Yes' AND sapdt_status='Active') OR (in_vsct='Yes' AND snomed_active='Yes'))"
         INACTIVE_COND = "NOT ((in_sapdt='Yes' AND sapdt_status='Active') OR (in_vsct='Yes' AND snomed_active='Yes'))"
         try:
@@ -197,27 +198,79 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             active   = q1(f"SELECT COUNT(DISTINCT COALESCE(NULLIF(snomed_concept_id,''),sapdt_concept_id)) FROM terms WHERE {ACTIVE_COND}")
             inactive = q1(f"SELECT COUNT(DISTINCT COALESCE(NULLIF(snomed_concept_id,''),sapdt_concept_id)) FROM terms WHERE {INACTIVE_COND} AND (in_sapdt='Yes' OR in_vsct='Yes')")
 
-            ku_syns  = 0
+            ku_syns = 0
             try:
                 cur.execute("SELECT COUNT(*) FROM ku_synonym_text")
                 ku_syns = cur.fetchone()[0]
             except Exception:
-                pass  # table not yet created
+                pass
 
             sapdt_vsct = q1("SELECT COUNT(*) FROM terms WHERE in_sapdt='Yes' AND in_vsct='Yes'")
             sapdt_sct  = q1("SELECT COUNT(*) FROM terms WHERE in_sapdt='Yes' AND in_sct_inter='Yes' AND in_vsct!='Yes'")
             vsct_only  = q1("SELECT COUNT(*) FROM terms WHERE in_vsct='Yes' AND in_sapdt!='Yes'")
 
+            # Global stats
+            global_terms = q1("SELECT COUNT(*) FROM concept_terms")
+            global_rels  = q1("SELECT COUNT(*) FROM relationships")
+
+            # Semantic distribution
+            cur.execute("SELECT snomed_semantic_type, COUNT(*) FROM terms WHERE snomed_semantic_type != '' GROUP BY snomed_semantic_type ORDER BY COUNT(*) DESC LIMIT 8")
+            sem_dist = {r[0]: r[1] for r in cur.fetchall()}
+
             conn.close()
+
+            # DB File & System Health
+            db_path = DB_PATH
+            db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 1) if os.path.exists(db_path) else 0
+            gz_path = db_path + '.gz'
+            gz_size_mb = round(os.path.getsize(gz_path) / (1024 * 1024), 1) if os.path.exists(gz_path) else 0
+
+            backup_dir = os.path.join(APP_DIR, 'backup')
+            backup_count = len(glob.glob(os.path.join(backup_dir, '*.db*'))) if os.path.exists(backup_dir) else 0
+            db_mtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(db_path))) if os.path.exists(db_path) else 'N/A'
+
             self.send_json({
-                'total':          total,
-                'active':         active,
-                'inactive':       inactive,
-                'ku_synonyms':    ku_syns,
-                'sapdt_and_vsct': sapdt_vsct,
-                'sapdt_and_sct':  sapdt_sct,
-                'vsct_only':      vsct_only
+                'total':                total,
+                'active':               active,
+                'inactive':             inactive,
+                'ku_synonyms':          ku_syns,
+                'sapdt_and_vsct':       sapdt_vsct,
+                'sapdt_and_sct':        sapdt_sct,
+                'vsct_only':            vsct_only,
+                'global_concept_terms': global_terms,
+                'global_relationships': global_rels,
+                'db_size_mb':           db_size_mb,
+                'gz_size_mb':           gz_size_mb,
+                'backup_count':         backup_count,
+                'db_last_modified':     db_mtime,
+                'semantic_counts':      sem_dist
             })
+        except Exception as e:
+            self.send_json({'error': str(e)}, status=500)
+
+    def handle_import_ku_synonyms(self, data):
+        """POST /api/admin/import_ku  body: { items: [{concept_id, text, lang?}] } or [{concept_id, text}]"""
+        items = data.get('items', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if not items:
+            self.send_json({'error': 'No items provided for import'}, status=400)
+            return
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            imported_count = 0
+            for item in items:
+                cid  = str(item.get('concept_id') or item.get('Concept Identifier') or '').strip()
+                text = str(item.get('text') or item.get('ku_synonym_text') or item.get('Synonym') or '').strip()
+                lang = str(item.get('lang') or item.get('lang_tag') or 'ku').strip()
+                if cid and text:
+                    # Check duplicate
+                    cur.execute("SELECT id FROM ku_synonym_text WHERE concept_id = ? AND ku_synonym_text = ?", (cid, text))
+                    if not cur.fetchone():
+                        cur.execute("INSERT INTO ku_synonym_text (concept_id, ku_synonym_text, lang_tag) VALUES (?, ?, ?)", (cid, text, lang))
+                        imported_count += 1
+            conn.commit()
+            conn.close()
+            self.send_json({'ok': True, 'imported': imported_count})
         except Exception as e:
             self.send_json({'error': str(e)}, status=500)
 

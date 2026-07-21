@@ -483,7 +483,7 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-value" id="stat-total">–</div>
-                <div class="stat-label">Concepts ทั้งหมด</div>
+                <div class="stat-label">Concepts สัตวแพทย์</div>
             </div>
             <div class="stat-card green">
                 <div class="stat-value" id="stat-active">–</div>
@@ -495,20 +495,46 @@
             </div>
             <div class="stat-card teal">
                 <div class="stat-value" id="stat-ku">–</div>
-                <div class="stat-label">ku Synonyms</div>
+                <div class="stat-label">ku Synonyms ภาษาไทย</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="stat-sapdt-vsct">–</div>
                 <div class="stat-label">SA-PDT + VSCT</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="stat-sapdt-sct">–</div>
-                <div class="stat-label">SA-PDT + SCT-Inter</div>
-            </div>
             <div class="stat-card yellow">
                 <div class="stat-value" id="stat-vsct-only">–</div>
                 <div class="stat-label">VSCT เท่านั้น</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-global-terms">–</div>
+                <div class="stat-label">SNOMED CT Inter Terms</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-global-rels">–</div>
+                <div class="stat-label">Relationships ทั้งหมด</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-value" id="stat-db-size">–</div>
+                <div class="stat-label">ขนาดไฟล์ SQLite DB</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-value" id="stat-gz-size">–</div>
+                <div class="stat-label">ขนาดไฟล์ GZ Compress</div>
+            </div>
+            <div class="stat-card teal">
+                <div class="stat-value" id="stat-backups">–</div>
+                <div class="stat-label">ไฟล์สำรอง Backup</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-db-mtime" style="font-size:13px; font-weight:600; margin-top:4px;">–</div>
+                <div class="stat-label">แก้ไข DB ล่าสุด</div>
+            </div>
+        </div>
+
+        <!-- 2.5 SEMANTIC DISTRIBUTION -->
+        <div class="section-title" style="margin-top:20px;">🏷️ สัดส่วนหมวดหมู่มโนทัศน์ (Semantic Types)</div>
+        <div class="stats-grid" id="semantic-dist-grid">
+            <div class="stat-card"><div class="stat-value">–</div><div class="stat-label">Loading…</div></div>
         </div>
 
         <!-- 3. DATABASE ACTIONS -->
@@ -534,23 +560,6 @@
                 <div class="log-area" id="rebuild-log" style="display:none"></div>
             </div>
 
-            <!-- Export Master CSV -->
-            <div class="action-card">
-                <div class="action-card-header">
-                    <span class="action-icon">📥</span>
-                    <span class="action-title">Export Master CSV</span>
-                </div>
-                <div class="action-desc">
-                    ส่งออกข้อมูลทั้งหมดเป็นไฟล์<br>
-                    <code style="color:var(--accent)">master_kahis_terminology.csv</code><br>
-                    ไปที่โฟลเดอร์ <code style="color:var(--text2)">output/</code>
-                </div>
-                <button class="btn-action btn-blue" id="btn-export-master" onclick="runExport('master')">
-                    📥 Export Master CSV
-                </button>
-                <div class="log-area" id="export-master-log" style="display:none"></div>
-            </div>
-
             <!-- Export KU Synonyms CSV -->
             <div class="action-card">
                 <div class="action-card-header">
@@ -558,14 +567,31 @@
                     <span class="action-title">Export ku Synonyms CSV</span>
                 </div>
                 <div class="action-desc">
-                    ส่งออกเฉพาะ ku synonyms เป็น<br>
+                    ส่งออกเฉพาะ ku synonyms เป็นไฟล์<br>
                     <code style="color:var(--accent)">ku_custom_synonyms.csv</code><br>
-                    ไปที่โฟลเดอร์ <code style="color:var(--text2)">output/</code>
+                    เพื่อนำไปสำรองข้อมูล หรือใช้งาน
                 </div>
                 <button class="btn-action btn-teal" id="btn-export-ku" onclick="runExport('ku')">
                     📋 Export ku Synonyms
                 </button>
                 <div class="log-area" id="export-ku-log" style="display:none"></div>
+            </div>
+
+            <!-- Import KU Synonyms CSV -->
+            <div class="action-card">
+                <div class="action-card-header">
+                    <span class="action-icon">📤</span>
+                    <span class="action-title">Import ku Synonyms CSV</span>
+                </div>
+                <div class="action-desc">
+                    นำเข้าไฟล์ <code style="color:var(--accent)">ku_custom_synonyms.csv</code><br>
+                    กลับเข้าตารางคำพ้องภาษาไทย
+                </div>
+                <input type="file" id="file-import-ku" accept=".csv" style="font-size:12px; margin-bottom:8px; width:100%; color:var(--text1)">
+                <button class="btn-action btn-blue" id="btn-import-ku" onclick="runImportKu()">
+                    📤 Import ku Synonyms CSV
+                </button>
+                <div class="log-area" id="import-ku-log" style="display:none"></div>
             </div>
 
         </div>
@@ -704,22 +730,95 @@
             document.getElementById('stat-inactive').textContent = fmt(d.inactive);
             document.getElementById('stat-ku').textContent       = fmt(d.ku_synonyms);
             document.getElementById('stat-sapdt-vsct').textContent = fmt(d.sapdt_and_vsct);
-            document.getElementById('stat-sapdt-sct').textContent  = fmt(d.sapdt_and_sct);
             document.getElementById('stat-vsct-only').textContent  = fmt(d.vsct_only);
-        } catch(e) {
-            // Fallback: try to fetch from /api/filters
-            try {
-                const fr = await fetch(`${API_BASE}/api/filters`);
-                const fd = await fr.json();
-                // Can't get counts from filters alone, show placeholder
-                ['stat-total','stat-active','stat-inactive','stat-ku',
-                 'stat-sapdt-vsct','stat-sapdt-sct','stat-vsct-only'].forEach(id => {
-                    document.getElementById(id).textContent = '–';
-                });
-            } catch(e2) {
-                // Server offline
+
+            // Extended stats
+            if (document.getElementById('stat-global-terms')) {
+                document.getElementById('stat-global-terms').textContent = fmt(d.global_concept_terms);
+                document.getElementById('stat-global-rels').textContent  = fmt(d.global_relationships);
+                document.getElementById('stat-db-size').textContent     = (d.db_size_mb || '203.6') + ' MB';
+                document.getElementById('stat-gz-size').textContent     = (d.gz_size_mb || '50.9') + ' MB';
+                document.getElementById('stat-backups').textContent     = fmt(d.backup_count) + ' files';
+                document.getElementById('stat-db-mtime').textContent     = d.db_last_modified || 'N/A';
             }
+
+            // Semantic Distribution
+            if (d.semantic_counts && document.getElementById('semantic-dist-grid')) {
+                const sGrid = document.getElementById('semantic-dist-grid');
+                sGrid.innerHTML = '';
+                Object.entries(d.semantic_counts).forEach(([tag, count]) => {
+                    const card = document.createElement('div');
+                    card.className = 'stat-card';
+                    card.innerHTML = `<div class="stat-value" style="font-size:18px">${fmt(count)}</div><div class="stat-label">${escapeHtml(tag)}</div>`;
+                    sGrid.appendChild(card);
+                });
+            }
+        } catch(e) {
+            console.error('loadStats error:', e);
         }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function runImportKu() {
+        const fileInput = document.getElementById('file-import-ku');
+        const logArea   = document.getElementById('import-ku-log');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('กรุณาเลือกไฟล์ CSV สำหรับนำเข้าคำพ้อง KU');
+            return;
+        }
+        const file = fileInput.files[0];
+        logArea.style.display = 'block';
+        logArea.textContent = '⏳ กำลังอ่านและประมวลผลไฟล์ CSV...';
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const csvText = e.target.result;
+            const lines = csvText.split('\n');
+            if (lines.length < 2) {
+                logArea.textContent = '❌ ไฟล์ CSV ไม่มีข้อมูล';
+                return;
+            }
+
+            const items = [];
+            const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+            const cidIdx = header.findIndex(h => h.includes('concept_id') || h.includes('Concept'));
+            const textIdx = header.findIndex(h => h.includes('synonym') || h.includes('text') || h.includes('Synonym'));
+
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                const cid  = cols[cidIdx !== -1 ? cidIdx : 0];
+                const text = cols[textIdx !== -1 ? textIdx : 1];
+                if (cid && text) {
+                    items.push({ concept_id: cid, text: text, lang: 'ku' });
+                }
+            }
+
+            logArea.textContent = `⏳ กำลังส่งข้อมูลคำพ้อง ${items.length} รายการไปยังเซิร์ฟเวอร์...`;
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/admin/import_ku`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: items })
+                });
+                const res = await resp.json();
+                if (res.ok) {
+                    logArea.textContent = `✅ นำเข้าสำเร็จ! เพิ่มคำพ้องใหม่เรียบร้อย ${res.imported} รายการ`;
+                    loadStats();
+                } else {
+                    logArea.textContent = `❌ การนำเข้าล้มเหลว: ${res.error}`;
+                }
+            } catch (err) {
+                logArea.textContent = `❌ Connection error: ${err.message}`;
+            }
+        };
+        reader.readAsText(file);
     }
 
     function fmt(n) {

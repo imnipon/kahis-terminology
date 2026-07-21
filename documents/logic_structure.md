@@ -2,7 +2,7 @@
 
 > **เอกสารข้อกำหนดสถาปัตยกรรม Logic และคู่มือการปฏิบัติงานมาตรฐาน (SOP / WI)**
 > สำหรับระบบบริหารจัดการและค้นหาข้อมูลคำศัพท์สัตวแพทย์ **KAHIS (SA-PDT & SNOMED CT Veterinary Extension)**
-> **เวอร์ชันเอกสาร**: 4.6.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
+> **เวอร์ชันเอกสาร**: 4.7.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
 
 ---
 
@@ -502,3 +502,34 @@ SNOMED CT International]
 ### 12.4 การขยายคอลัมน์สืบค้นคำพ้องเต็มรูปแบบ (Full Synonym Search Coverage)
 
 ในระบบหลังบ้าน API `/api/search` (`server.py`) ได้ปรับปรุงเงื่อนไข SQL ให้รวมเอาคอลัมน์ **`snomed_all_synonyms`** และ **`snomed_preferred_term`** เข้าร่วมการค้นหาแบบ `LIKE` ด้วย ทำให้สัตวแพทย์สามารถค้นหาคำศัพท์ที่ซ่อนอยู่ในชุดคำพ้องส่วนขยาย (เช่น ค้นคำว่า *lymphoma* แล้วพบ *Feline leukemia virus infection* หรือ *Marek's disease*) ได้อย่างสมบูรณ์แบบ 100%
+
+---
+
+## 13. ระบบสถิติขั้นสูง และการจัดการคำพ้องใน Admin Panel (Advanced Statistics & Admin Management: v4.7.0)
+
+เพื่ออำนวยความสะดวกให้ Admin สามารถตรวจสอบสุขภาพของระบบ สัดส่วนข้อมูล และจัดการคำพ้องภาษาไทยได้อย่างครบวงจร หน้าจอ Admin Panel (`admin.html`) และ API หลังบ้าน (`/api/admin/stats`) ได้รับการอัปเกรดดังนี้:
+
+### 13.1 การ์ดสถิติระบบและไฟล์ฐานข้อมูล (System & Database Health Cards)
+
+- **SNOMED CT Inter Terms**: `568,744` (จำนวนมโนทัศน์และคำพ้องสากลทั้งหมดในตาราง `concept_terms`)
+- **Relationships ทั้งหมด**: `1,357,048` (จำนวนสายสัมพันธ์มโนทัศน์ทั้งหมดในตาราง `relationships`)
+- **ขนาดไฟล์ SQLite DB**: `203.6 MB` (ขนาดไฟล์ `terminology_search.db`)
+- **ขนาดไฟล์ GZ Compress**: `50.9 MB` (ขนาดไฟล์ `terminology_search.db.gz`)
+- **ไฟล์สำรอง Backup**: จำนวนไฟล์สำรองทั้งหมดในโฟลเดอร์ `backup/`
+- **แก้ไข DB ล่าสุด**: วันเวลาที่มีการแก้ไขหรือ Rebuild ฐานข้อมูลล่าสุด
+
+### 13.2 การแสดงสัดส่วนหมวดหมู่มโนทัศน์ (Semantic Tag Distribution Grid)
+
+แสดงการกระจายตัวตามหมวดหมู่หลักในฐานข้อมูล (Top Semantic Tags):
+- 🩺 **organism (เชื้อโรค/สิ่งมีชีวิต)**: ~31,338 รายการ
+- 🩺 **disorder (โรค)**: ~4,313 รายการ
+- 🔍 **finding (อาการ/สิ่งพบ)**: ~1,999 รายการ
+- 🦴 **body structure (โครงสร้างร่างกาย)**: ~950 รายการ
+- 💉 **procedure (หัตถการ)**: ~404 รายการ
+- 💊 **medicinal product (ยารักษาโรค)**: ~350 รายการ
+
+### 13.3 ปุ่มนำเข้าคำพ้องภาษาไทย (Import ku Synonyms CSV Action)
+
+- เพิ่มปุ่ม **`[📤 Import ku Synonyms CSV]`** คู่กับปุ่ม Export เดิม
+- รองรับการเลือกไฟล์ CSV (`ku_custom_synonyms.csv`) นำเข้าคำพ้องภาษาไทยเข้าตาราง `ku_synonym_text` โดยตรง
+- ช่วยให้ Admin สามารถ Restore หรือ Sync คำพ้องภาษาไทยกลับเข้าสู่ระบบได้ทันที
