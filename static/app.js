@@ -368,6 +368,11 @@ document.addEventListener('DOMContentLoaded', () => {
         performSearch();
     });
 
+    document.getElementById('globalSearch')?.addEventListener('change', () => {
+        currentPage = 1;
+        performSearch();
+    });
+
     prevPageBtn.addEventListener('click', () => {
         if (currentPage > 1) {
             currentPage--;
@@ -439,10 +444,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function performSearch() {
         const offset = (currentPage - 1) * pageSize;
+        const isGlobal = document.getElementById('globalSearch')?.checked || false;
         const params = new URLSearchParams({
             q: currentQuery,
             status: currentStatusMode,
             group_by_concept: isGroupByConcept ? 'true' : 'false',
+            global_search: isGlobal ? 'true' : 'false',
             limit: pageSize,
             offset: offset
         });
@@ -504,8 +511,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? ' <span class="source-badge-micro micro-inactive">Inactive</span>'
                 : '';
 
+            const isSctOnly = (item.in_sapdt === 'No' && item.in_vsct === 'No' && item.in_sct_inter === 'Yes');
+            const sctOnlyBadge = isSctOnly
+                ? ' <span class="source-badge-micro micro-sct-only" style="background:#e2e8f0; color:#334155; font-weight:600; border:1px solid #cbd5e1;">SCT-Inter Only</span>'
+                : '';
+
             tr.innerHTML = `
-                <td class="term-col">${iconHtml} ${escapeHtml(item.display_name)}${inactiveBadge}</td>
+                <td class="term-col">${iconHtml} ${escapeHtml(item.display_name)}${inactiveBadge}${sctOnlyBadge}</td>
                 <td class="fsn-col">${escapeHtml(item.snomed_fsn || item.display_name)}</td>
             `;
 

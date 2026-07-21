@@ -531,6 +531,51 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             total_count = len(expanded_rows)
             rows = expanded_rows[offset:offset+limit]
 
+        # Global Search Extension: Query concept_terms for SCT International Only concepts
+        global_search = params.get('global_search', ['false'])[0].lower() == 'true'
+        if global_search and q:
+            existing_cids = {str(r.get('snomed_concept_id') or r.get('sapdt_concept_id')) for r in rows if r.get('snomed_concept_id') or r.get('sapdt_concept_id')}
+            
+            if q.isdigit():
+                ct_sql = "SELECT DISTINCT concept_id, term, semantic_type FROM concept_terms WHERE concept_id LIKE ? LIMIT 100"
+                ct_params = [f"{q}%"]
+            else:
+                clean_q = q.replace('"', '').replace("'", "")
+                first_w = clean_q.split()[0]
+                ct_sql = "SELECT DISTINCT concept_id, term, semantic_type FROM concept_terms WHERE term LIKE ? LIMIT 100"
+                ct_params = [f"%{first_w}%"]
+
+            cursor.execute(ct_sql, ct_params)
+            ct_rows = [dict(r) for r in cursor.fetchall()]
+            
+            extra_sct_rows = []
+            for cr in ct_rows:
+                cid = str(cr['concept_id'])
+                if cid not in existing_cids:
+                    existing_cids.add(cid)
+                    extra_sct_rows.append({
+                        'id': f"ct_{cid}",
+                        'display_name': cr['term'],
+                        'sapdt_concept_id': '',
+                        'snomed_concept_id': cid,
+                        'snomed_fsn': cr['term'],
+                        'snomed_preferred_term': cr['term'],
+                        'snomed_semantic_type': cr['semantic_type'] or 'concept',
+                        'body_system': 'Systemic / Not Applicable (N/A)',
+                        'match_type': 'sct_inter_only',
+                        'synonym': '',
+                        'in_sapdt': 'No',
+                        'in_vsct': 'No',
+                        'in_sct_inter': 'Yes',
+                        'sapdt_status': 'Inactive',
+                        'snomed_active': 'Yes'
+                    })
+            
+            total_count += len(extra_sct_rows)
+            needed = max(0, limit - len(rows))
+            if needed > 0:
+                rows.extend(extra_sct_rows[:needed])
+
         # Dynamic Hit Counters for semantic filter
         semantic_counts = {}
 
