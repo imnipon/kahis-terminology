@@ -446,12 +446,13 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 for word in words:
                     where_clauses.append("""
                     (display_name LIKE ? OR synonym LIKE ? OR snomed_fsn LIKE ? OR sapdt_fsn LIKE ? OR 
+                     snomed_preferred_term LIKE ? OR snomed_all_synonyms LIKE ? OR 
                      COALESCE(snomed_concept_id, sapdt_concept_id) IN (
                          SELECT concept_id FROM ku_synonym_text WHERE ku_synonym_text LIKE ?
                      ))
                     """)
                     like_pat = f"%{word}%"
-                    sql_params.extend([like_pat, like_pat, like_pat, like_pat, like_pat])
+                    sql_params.extend([like_pat, like_pat, like_pat, like_pat, like_pat, like_pat, like_pat])
 
         # Multi-select Semantic Types filter
         if stypes and len(stypes) > 0 and stypes[0] != '':
