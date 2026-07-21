@@ -2,7 +2,7 @@
 
 > **เอกสารข้อกำหนดสถาปัตยกรรม Logic และคู่มือการปฏิบัติงานมาตรฐาน (SOP / WI)**
 > สำหรับระบบบริหารจัดการและค้นหาข้อมูลคำศัพท์สัตวแพทย์ **KAHIS (SA-PDT & SNOMED CT Veterinary Extension)**
-> **เวอร์ชันเอกสาร**: 4.3.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
+> **เวอร์ชันเอกสาร**: 4.4.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
 
 ---
 
@@ -418,3 +418,41 @@ graph TD
 
 2. **การแสดงผลสถานะ Inactive**:
    - KAHIS แสดง Parent `Hyperthermia` พร้อมแท็ก **`[Inactive]`** เพื่อให้สัตวแพทย์ทราบถึงประวัติการแมปในอดีตของ SA-PDT ในขณะที่ Official Browser กรอง Inactive Relationships ออกไปในมุมมอง Inferred
+
+---
+
+### 11.3 เหตุผลการเลือกแสดงผล Display Name ทางสัตวแพทย์เทียบกับ FSN (Veterinary Preferred Display Name vs FSN Rationale)
+
+ในภาพตัวอย่างการค้นหาคำว่า **`Cholestasis`** [SCTID: 33688009]:
+- **รายการในตารางฝั่งซ้าย**: แสดงชื่อหลักเป็น **`Biliary stasis`** (ตัวหนา) และมีชื่อรองสากลเป็น **`Cholestasis (finding)`** (ตัวเทา)
+- **กล่องรายละเอียดฝั่งขวา**: แสดง FSN เป็น `Cholestasis (finding)` และมี Synonyms คือ `Cholestasis`, `Bile stasis`, `Biliary stasis`
+
+#### เหตุผลทางสถาปัตยกรรม (Design & Priority Rationale):
+
+```mermaid
+flowchart LR
+    subgraph Merging Priority Rule
+        A[SA-PDT Preferred Term
+'Biliary stasis'] -->|Priority 1| D[display_name
+'Biliary stasis']
+        B[SNOMED CT FSN
+'Cholestasis (finding)'] -->|Priority 2| E[snomed_fsn
+'Cholestasis (finding)']
+    end
+```
+
+1. **ลำดับความสำคัญของข้อมูล (`SA-PDT` > `VSCT` > `SCT International`)**:
+   - เป้าหมายหลักของโครงการ KAHIS คือการอ้างอิงคำศัพท์ทางคลินิกสัตวแพทย์เล็กตาม **SA-PDT** เป็นอันดับแรก
+   - ในไฟล์ต้นฉบับ SA-PDT ระบุว่า `sapdt_preferred` = **`Biliary stasis`** (ชื่อที่สัตวแพทย์นิยมใช้หลัก) และ `sapdt_acceptable` = **`Cholestasis`**
+   - สคริปต์ Merging Engine จึงคัดเลือก `sapdt_preferred` (**`Biliary stasis`**) ขึ้นเป็น `display_name` สำหรับแสดงผลหลัก
+
+2. **หลักการมาตรฐาน SNOMED CT: FSN vs Preferred Term**:
+   - **FSN (Fully Specified Name)** เช่น `Cholestasis (finding)`: เป็นชื่อเต็มทางการที่มีวงเล็บหมวดหมู่ต่อท้าย `(finding)` ใช้สำหรับระบุนิยามความหมายทางคลินิกไร้ความคลุมเครือในฐานข้อมูลสากล ไม่นิยมนำไปแสดงเป็นชื่อหลักบนหน้าจอเวชระเบียนประจำวัน
+   - **Preferred Term (ชื่อทางคลินิก)** เช่น `Biliary stasis`: เป็นชื่อสั้น กระชับ ไม่มีวงเล็บ เหมาะสำหรับสัตวแพทย์ใช้บันทึกในประวัติการรักษา (EHR/EMR)
+
+3. **กลไกการสืบค้นและการแสดงผลสองระดับ (Dual Display Mechanism)**:
+   - **ค้นหาได้ทุกคำ**: สัตวแพทย์พิมพ์คำว่า `Cholestasis` ระบบ FTS จะไปค้นทั้งใน `snomed_fsn`, `sapdt_acceptable` และ `synonyms` ทำให้ **ค้นหาพบ 100%**
+   - **การแสดงผลฝั่งซ้าย**: 
+     - บรรทัดบน (ตัวหนา): แสดง `display_name` ทางสัตวแพทย์ (**`Biliary stasis`**)
+     - บรรทัดล่าง (ตัวเทา): แสดง `snomed_fsn` สากล (**`Cholestasis (finding)`**)
+   - **การแสดงผลฝั่งขวา**: แสดงแท็ก **`FSN`** สำหรับ `Cholestasis (finding)` และแท็ก **`Synonym`** สำหรับคำพ้องอื่นๆ ครบถ้วนทุกคำ
