@@ -593,13 +593,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Database Presence Badges
         dbBadgesRow.innerHTML = '';
         if (data.in_sapdt === 'Yes') {
-            dbBadgesRow.innerHTML += '<span class="db-badge-pill">SA-PDT</span>';
+            dbBadgesRow.innerHTML += '<span class="db-badge-pill db-badge-sapdt">SA-PDT</span>';
         }
         if (data.in_vsct === 'Yes') {
-            dbBadgesRow.innerHTML += '<span class="db-badge-pill">VSCT</span>';
+            dbBadgesRow.innerHTML += '<span class="db-badge-pill db-badge-vsct">VSCT</span>';
         }
         if (data.in_sct_inter === 'Yes') {
-            dbBadgesRow.innerHTML += '<span class="db-badge-pill">SCT-Inter</span>';
+            dbBadgesRow.innerHTML += '<span class="db-badge-pill db-badge-sct">SCT-Inter</span>';
         }
 
         conceptFsnFull.textContent = `${data.concept_id} | ${data.snomed_fsn || titleTerm} |`;

@@ -2,7 +2,7 @@
 
 > **เอกสารข้อกำหนดสถาปัตยกรรม Logic และคู่มือการปฏิบัติงานมาตรฐาน (SOP / WI)**
 > สำหรับระบบบริหารจัดการและค้นหาข้อมูลคำศัพท์สัตวแพทย์ **KAHIS (SA-PDT & SNOMED CT Veterinary Extension)**
-> **เวอร์ชันเอกสาร**: 4.7.1 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
+> **เวอร์ชันเอกสาร**: 4.9.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
 
 ---
 
@@ -537,3 +537,124 @@ SNOMED CT International]
 ### 13.4 การปรับปรุงการจัดวาง Micro Badges บนรายการค้นหา (UI Badge Line Break Layout)
 
 เพื่อความสวยงามและการอ่านข้อมูลที่เป็นระเบียบ ในตารางผลการค้นหาฝั่งซ้าย ได้ปรับปรุงการจัดวางตำแหน่ง Micro Badges (`SA-PDT`, `VSCT`, `SCT-Inter Only`) โดยย้ายจากการต่อท้ายชื่อคำเดิม มาไว้บน **บรรทัดใหม่ใต้อัตโนมัติ (New Line below Title)** ช่วยให้สัตวแพทย์อ่านชื่อโรคได้เต็มบรรทัดโดยไม่โดนป้าย Badge บดบัง
+
+### 13.5 การปรับปรุงการโหลดข้อมูลสถิติต้นทางอัตโนมัติ (Dashboard Auto-Load on Page Initialization)
+
+ปรับปรุงสคริปต์ใน `admin.html` ให้ทำการเรียกใช้ `loadDashboard()` อัตโนมัติทันทีเมื่อเปิดหน้าจอหรือรีเฟรช (`DOMContentLoaded`) เพื่อรับประกันว่าการ์ดสถิติระบบ 12 ใบ และสัดส่วน Semantic Distribution จะดึงข้อมูลล่าสุดมาแสดงผลเสมอ แม้ไม่ได้ผ่านการกรอก PIN ใหม่
+
+---
+
+## 14. การตรวจสอบความถูกต้องสถิติ (Database Audit) และการเพิ่ม Source Badges บนการ์ดสถิติ (v4.8.0)
+
+### 14.1 ผลการตรวจสอบความถูกต้องของสถิติจากฐานข้อมูล (Database Audit & Mathematical Verification)
+
+ผลการรัน SQL Audit ตรงกับฐานข้อมูล `terminology_search.db` 100%:
+
+1. **Concepts สัตวแพทย์ทั้งหมด**: `40,306` รายการ
+   - `Active`: **38,524** | `Inactive / Retired`: **1,782** 
+   - (ตรวจสอบสมการ: `38,524 + 1,782 = 40,306` ตรงกัน 100%)
+2. **สัดส่วนการแมปข้อมูลสัตวแพทย์**:
+   - `SA-PDT + VSCT (Overlap)`: **1,599**
+   - `SA-PDT Only`: **2,890**
+   - `VSCT Only`: **35,817**
+   - (ตรวจสอบสมการ: `2,890 + 1,599 + 35,817 = 40,306` ตรงกัน 100%)
+3. **มโนทัศน์สากลและสายสัมพันธ์**:
+   - `SNOMED CT Inter Terms`: **568,744** รายการ
+   - `Relationships ทั้งหมด`: **1,357,048** สายสัมพันธ์
+
+### 14.2 การแก้ไข UI ป้องกันตัวเลขล้นกรอบ (Fluid Typography & Micro Container)
+
+- ปรับแต่ง CSS `.stat-value` ด้วยคำสั่ง `font-size: clamp(14px, 1.7vw, 24px)` และ `text-overflow: ellipsis`
+- ป้องกันไม่ให้ตัวเลขหลักล้าน (`1,357,048`) หรือวันเวลา (`2026-07-21 17:41:00`) เบียดล้นขอบการ์ด
+
+### 14.3 การเพิ่ม Badges ระบุแหล่งที่มาบนการ์ดสถิติ (Card Source Badges)
+
+เพิ่มป้าย Badge กำกับบนการ์ดสถิติทุกใบใน Admin Panel:
+- 🔵 **`[SA-PDT]` `[VSCT]`**: กำกับบนการ์ดสถิติ `Concepts สัตวแพทย์`, `Active`, `Inactive`, `Overlap`, และ `Semantic Types`
+- 🟡 **`[VSCT ONLY]`**: กำกับบนการ์ด `VSCT เท่านั้น`
+- ⚪ **`[SCT-INTER]`**: กำกับบนการ์ด `SNOMED CT Inter Terms` และ `Relationships ทั้งหมด`
+- 🟢 **`[KU SYNONYM]`**: กำกับบนการ์ด `ku Synonyms ภาษาไทย`
+- 🟣 **`[SYSTEM DB/GZ/TIME]`**: กำกับบนการ์ดข้อมูลระบบและดิสก์
+
+---
+
+## 15. ระบบสีมาตรฐานสำหรับป้ายกำกับ (Project-Wide Unified Badge Color System: v4.9.0)
+
+เพื่อสร้างภาพลักษณ์ของแอปพลิเคชัน (Visual Identity) ที่เป็นเอกภาพ สมมิตระการตา และสอดคล้องกันตลอดทั้งโปรเจกต์ ทั้งในหน้าสืบค้นหลัก (`index.html`), การ์ดรายละเอียดมโนทัศน์ฝั่งขวา, ตารางผลการค้นหา และหน้าจอ Admin Panel (`admin.html`) ระบบได้กำหนดมาตรฐานโค้ดสีกลางของป้ายกำกับ (Badge Color Tokens) ดังนี้:
+
+### 15.1 ตารางโค้ดสีป้ายกำกับมาตรฐาน (Unified Badge Tokens Table)
+
+| แหล่งข้อมูล / ประเภท | รหัส Class | พื้นหลัง (Background) | สีตัวอักษร (Text Color) | กรอบ (Border) |
+| :--- | :--- | :---: | :---: | :---: |
+| 🔵 **SA-PDT** | `.badge-sapdt`, `.micro-sapdt`, `.badge-tag-sapdt`, `.db-badge-sapdt` | `#dbeafe` | `#1e40af` | `1px solid #93c5fd` |
+| 🟢 **VSCT** | `.badge-vsct`, `.micro-vsct`, `.badge-tag-vsct`, `.db-badge-vsct` | `#d1fae5` | `#065f46` | `1px solid #6ee7b7` |
+| 🟡 **VSCT ONLY** | `.badge-vsct-only`, `.badge-tag-vsct-only` | `#fef3c7` | `#92400e` | `1px solid #fde68a` |
+| ⚪ **SCT-INTER / SCT-Inter Only** | `.badge-sct`, `.badge-sct-only`, `.micro-inter`, `.badge-tag-sct`, `.db-badge-sct` | `#f1f5f9` | `#475569` | `1px solid #cbd5e1` |
+| 🩵 **KU SYNONYM** | `.badge-ku`, `.micro-ku`, `.badge-tag-ku`, `.db-badge-ku` | `#ccfbf1` | `#115e59` | `1px solid #99f6e4` |
+| 🟣 **SYSTEM / METADATA** | `.badge-sys`, `.badge-tag-sys` | `#f3e8ff` | `#6b21a8` | `1px solid #d8b4fe` |
+| 🔴 **INACTIVE / RETIRED** | `.micro-inactive` | `#fee2e2` | `#991b1b` | `1px solid #fca5a5` |
+
+### 15.2 ประโยชน์ของการปรับปรุงระบบสีกลาง (System Benefits)
+
+1. **ข้ามโมดูลเป็นเอกภาพ 100%**: ไม่ว่าจะดูป้ายกำกับที่ Header, ในตารางผลการค้นหาฝั่งซ้าย, ในการ์ดรายละเอียดฝั่งขวา หรือใน Admin Panel สีและตัวหนังสือจะเหมือนกันเป๊ะ 100%
+2. **ความสบายตา Contrast สูง อ่านง่าย**: ปรับให้ทุกป้ายเป็นพื้นหลังโทนอ่อนสว่าง (Pastel Soft Tone) ตัดกับตัวอักษรสีเข้ม (Dark High Contrast Text) อ่านชัดเจนทั้งในโหมดสว่างและโหมดมืด
+
+---
+
+## 16. การกำหนดเวอร์ชันแอปพลิเคชัน (App Versioning: v4.9.0) และข้อเสนอแนะคำพ้องภาษาไทยใช้บ่อย
+
+### 16.1 การแสดงผลเลขเวอร์ชันแอปพลิเคชัน (Unified App Version Badge)
+
+ระบบได้เพิ่ม Badge แสดงเลขเวอร์ชันแอปพลิเคชัน **`v4.9.0`** ที่ส่วนหัว (Header Topbar) ทั้งในหน้าจอผู้ใช้งานทั่วไป (`index.html`) และหน้าจอผู้ดูแลระบบ (`admin.html`) เพื่อให้เลขเวอร์ชันเป็นเอกภาพ สอดคล้องกันทั้งโปรเจกต์
+
+### 16.2 ตารางมโนทัศน์สัตวแพทย์ยอดนิยม และข้อเสนอแนะคำพ้องภาษาไทย (`ku_synonym_text`)
+
+ตารางรวบรวมมโนทัศน์โรคและอาการทางคลินิกที่ใช้บ่อยในทางสัตวแพทย์ พร้อมข้อเสนอแนะคำพ้องภาษาไทยเพื่อนำเข้าตาราง `ku_synonym_text`:
+
+| ลำดับ | Concept ID | ชื่อภาษาอังกฤษ (SNOMED CT / VSCT Display Name) | หมวดหมู่ (Semantic Type) | ข้อเสนอแนะคำพ้องภาษาไทย (`ku_synonym_text`) |
+| :---: | :---: | :--- | :---: | :--- |
+| 1 | `49727002` | Cough | finding | ไอ |
+| 2 | `281201000009107` | Acute cough | finding | ไอเฉียบพลัน |
+| 3 | `68154008` | Chronic cough | finding | ไอเรื้อรัง |
+| 4 | `358791000009101` | Cardiogenic cough | finding | ไอจากโรคหัวใจ / ไอจากหัวใจโต |
+| 5 | `271830006` | Dry cough | finding | ไอแห้ง |
+| 6 | `62315008` | Diarrhea | finding | ท้องเสีย / ถ่ายเหลว |
+| 7 | `308191000009107` | Acute large bowel diarrhea | finding | ท้องเสียถ่ายเหลวเฉียบพลันลำไส้ใหญ่ |
+| 8 | `308201000009109` | Acute small bowel diarrhea | finding | ท้องเสียถ่ายเหลวเฉียบพลันลำไส้เล็ก |
+| 9 | `95544007` | Bloody diarrhea | finding | ถ่ายเป็นเลือด / ท้องเสียเป็นเลือด |
+| 10 | `422400008` | Vomiting | disorder | อ้วก / อาเจียน |
+| 11 | `23971007` | Acute vomiting | disorder | อาเจียนเฉียบพลัน |
+| 12 | `63722008` | Chronic vomiting | disorder | อาเจียนเรื้อรัง |
+| 13 | `71419002` | Bilious vomiting | disorder | อาเจียนเป็นน้ำดี / อาเจียนเป็นน้ำนิ่ง |
+| 14 | `249497008` | Hematemesis | finding | อาเจียนเป็นเลือด |
+| 15 | `79890006` | Melena | finding | ถ่ายอุจจาระสีดำ / ถ่ายดำ |
+| 16 | `405729008` | Hematochezia | finding | ถ่ายเป็นเลือดสด |
+| 17 | `18165001` | Jaundice | finding | ตัวเหลือง / ตาเหลือง / ดีซ่าน |
+| 18 | `8186001` | Cardiomegaly | disorder | หัวใจโต |
+| 19 | `290911000009108` | Left ventricular enlargement | disorder | หัวใจห้องล่างซ้ายโต |
+| 20 | `56381008` | Calculus | disorder | นิ่ว / ก้อนนิ่ว |
+| 21 | `57054005` | Urinary bladder calculus | disorder | นิ่วในกระเพาะปัสสาวะ / นิ่วกระเพาะปัสสาวะ |
+| 22 | `36425000` | Renal calculus | disorder | นิ่วในไต / นิ่วไต |
+| 23 | `235919008` | Gallbladder calculus | disorder | นิ่วในถุงน้ำดี / นิ่วถุงน้ำดี |
+| 24 | `9535003` | Cholelith | disorder | ก้อนนิ่วถุงน้ำดี |
+| 25 | `444690001` | Struvite urolithiasis | disorder | นิ่วสตรูไวท์ (Struvite) |
+| 26 | `86392003` | Hematuria | finding | ปัสสาวะเป็นเลือด / เยี่ยวเป็นเลือด |
+| 27 | `28942008` | Dysuria | finding | ปัสสาวะขัด / ปัสสาวะลำบาก |
+| 28 | `48721008` | Stranguria | finding | เบ่งปัสสาวะ / ปัสสาวะกะปริดกะปรอย |
+| 29 | `28442001` | Polyuria | finding | ปัสสาวะมาก / เยี่ยวบ่อย |
+| 30 | `30184000` | Polydipsia | finding | กินน้ำมาก / ทานน้ำเยอะ |
+| 31 | `89438005` | Anorexia | finding | เบื่ออาหาร / ไม่กินอาหาร |
+| 32 | `21424008` | Lethargy | finding | ซึม / อ่อนแรง |
+| 33 | `386661006` | Fever | finding | ไข้ / ตัวร้อน |
+| 34 | `419266005` | Dehydration | finding | ภาวะขาดน้ำ |
+| 35 | `389026000` | Ascites | finding | ท้องมาน / มีน้ำในช่องท้อง |
+| 36 | `418363000` | Pruritus | finding | คัน / อาการคัน |
+| 37 | `56317004` | Alopecia | finding | ขนร่วง |
+| 38 | `200773007` | Dermatitis | disorder | ผิวหนังอักเสบ |
+| 39 | `47505003` | Otitis externa | disorder | หูชั้นนอกอักเสบ |
+| 40 | `91175000` | Seizure | finding | ชัก / อาการชัก |
+| 41 | `386692008` | Paralysis | finding | อัมพาต |
+| 42 | `279079003` | Lameness | finding | ขาเจ็บ / กะเพลก / เดินกะเพลก |
+| 43 | `198124007` | Pyometra | disorder | มดลูกอักเสบเป็นหนอง |
+| 44 | `271737000` | Anemia | disorder | ภาวะโลหิตจาง / เลือดจาง |
+| 45 | `195967001` | Asthma | disorder | หอบหืด |
