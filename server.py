@@ -220,7 +220,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             conn.close()
 
             # DB File & System Health
-            db_path = DB_PATH
+            db_path = DB_FILE
             db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 1) if os.path.exists(db_path) else 0
             gz_path = db_path + '.gz'
             gz_size_mb = round(os.path.getsize(gz_path) / (1024 * 1024), 1) if os.path.exists(gz_path) else 0
