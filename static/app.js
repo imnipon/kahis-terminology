@@ -511,20 +511,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let badgesHtml = '';
             if (item.in_sapdt === 'Yes') {
-                badgesHtml += ' <span class="badge-micro badge-sapdt">SA-PDT</span>';
+                badgesHtml += '<span class="badge-micro badge-sapdt">SA-PDT</span>';
             }
             if (item.in_vsct === 'Yes') {
-                badgesHtml += ' <span class="badge-micro badge-vsct">VSCT</span>';
+                badgesHtml += '<span class="badge-micro badge-vsct">VSCT</span>';
             }
             if (isSctOnly) {
-                badgesHtml += ' <span class="badge-micro badge-sct-only">SCT-Inter Only</span>';
+                badgesHtml += '<span class="badge-micro badge-sct-only">SCT-Inter Only</span>';
             }
             if (!isAct && currentStatusMode === 'all') {
-                badgesHtml += ' <span class="source-badge-micro micro-inactive">Inactive</span>';
+                badgesHtml += '<span class="source-badge-micro micro-inactive">Inactive</span>';
             }
 
+            const badgesRowHtml = badgesHtml ? `<div class="term-badges-row">${badgesHtml}</div>` : '';
+
             tr.innerHTML = `
-                <td class="term-col">${iconHtml} ${escapeHtml(item.display_name)}${badgesHtml}</td>
+                <td class="term-col">
+                    <div class="term-title">${iconHtml} ${escapeHtml(item.display_name)}</div>
+                    ${badgesRowHtml}
+                </td>
                 <td class="fsn-col">${escapeHtml(item.snomed_fsn || item.display_name)}</td>
             `;
 
