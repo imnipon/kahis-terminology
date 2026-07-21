@@ -507,17 +507,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isAct = (item.in_sapdt === 'Yes' && item.sapdt_status === 'Active') ||
                           (item.in_vsct === 'Yes' && item.snomed_active === 'Yes');
-            const inactiveBadge = (!isAct && currentStatusMode === 'all')
-                ? ' <span class="source-badge-micro micro-inactive">Inactive</span>'
-                : '';
-
             const isSctOnly = (item.in_sapdt === 'No' && item.in_vsct === 'No' && item.in_sct_inter === 'Yes');
-            const sctOnlyBadge = isSctOnly
-                ? ' <span class="source-badge-micro micro-sct-only" style="background:#e2e8f0; color:#334155; font-weight:600; border:1px solid #cbd5e1;">SCT-Inter Only</span>'
-                : '';
+
+            let badgesHtml = '';
+            if (item.in_sapdt === 'Yes') {
+                badgesHtml += ' <span class="badge-micro badge-sapdt">SA-PDT</span>';
+            }
+            if (item.in_vsct === 'Yes') {
+                badgesHtml += ' <span class="badge-micro badge-vsct">VSCT</span>';
+            }
+            if (isSctOnly) {
+                badgesHtml += ' <span class="badge-micro badge-sct-only">SCT-Inter Only</span>';
+            }
+            if (!isAct && currentStatusMode === 'all') {
+                badgesHtml += ' <span class="source-badge-micro micro-inactive">Inactive</span>';
+            }
 
             tr.innerHTML = `
-                <td class="term-col">${iconHtml} ${escapeHtml(item.display_name)}${inactiveBadge}${sctOnlyBadge}</td>
+                <td class="term-col">${iconHtml} ${escapeHtml(item.display_name)}${badgesHtml}</td>
                 <td class="fsn-col">${escapeHtml(item.snomed_fsn || item.display_name)}</td>
             `;
 
