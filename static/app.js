@@ -863,7 +863,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (pin !== '53027918') {
-                synonymModalStatus.textContent = 'รหัส PIN ไม่ถูกต้อง (กรุณาป้อน PIN: 53027918)';
+                synonymModalStatus.textContent = 'รหัส PIN ไม่ถูกต้อง';
                 return;
             }
 

@@ -1,1 +1,54 @@
+# ============================================================
+# KAHIS Terminology App — .gitignore
+# ============================================================
+
+# ----- Database files (binary data files, do not push to git) -----
 terminology_search.db
+terminology_search.db.gz
+*.db
+*.db.gz
+
+# ----- Backup files ----------------------------------------
+backup/
+
+# ----- macOS system files ----------------------------------
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ----- Python -----------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+pip-log.txt
+
+# ----- Logs & temp -----------------------------------------
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# ----- Editor / IDE ----------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ----- OS & environment ------------------------------------
+Thumbs.db
+.env
+.env.local

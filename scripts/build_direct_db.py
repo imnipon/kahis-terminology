@@ -308,7 +308,12 @@ def build():
 
     # --- Read VSCT descriptions ---
     log('Step 2/6: อ่าน VSCT descriptions...')
-    vsct_desc_path = find_rf2(vsct_dir, 'sct2_Description_Snapshot*.txt')
+    # FIX-01: บังคับใช้ไฟล์ภาษาอังกฤษ (-en) เป็น primary เพื่อป้องกัน glob เลือกไฟล์ภาษาสเปน (-es)
+    # glob.glob() ไม่รับประกัน sort order — ระบุ -en pattern โดยตรงเพื่อความแน่นอน
+    vsct_desc_path = (
+        find_rf2(vsct_dir, 'sct2_Description_Snapshot-en*.txt') or
+        find_rf2(vsct_dir, 'sct2_Description_Snapshot*.txt')
+    )
     vsct_conc_path = find_rf2(vsct_dir, 'sct2_Concept_Snapshot*.txt')
     vsct_rel_path  = find_rf2(vsct_dir, 'sct2_Relationship_Snapshot*.txt')
 
@@ -316,6 +321,7 @@ def build():
         log(f'VSCT files incomplete. Found: desc={vsct_desc_path}, conc={vsct_conc_path}, rel={vsct_rel_path}', 'ERROR')
         sys.exit(1)
 
+    log(f'  VSCT desc file: {os.path.basename(vsct_desc_path)}')
     vsct_descs  = read_rf2_descriptions(vsct_desc_path)
     vsct_concs  = read_rf2_concepts(vsct_conc_path)
     vsct_rels   = read_rf2_relationships(vsct_rel_path, 'vsct')
@@ -338,9 +344,8 @@ def build():
     log('Step 4/6: Merge ข้อมูล...')
 
     # 4a. Merge SA-PDT + VSCT + SCT info
-    # NOTE: VSCT -es file = Spanish synonyms only, no English FSN
-    #   => English FSN/Preferred from SCT International
-    #   => Active status from VSCT concept table
+    # Priority: SCT-Int English > VSCT-en English > SA-PDT own terms
+    # Active status from VSCT concept table
     for sapdt_cid, rec in sapdt.items():
         snomed_cid = rec['snomed_concept_id']
 
@@ -349,14 +354,17 @@ def build():
         if snomed_cid in sct_descs:
             rec['in_sct_inter'] = 'Yes'
 
-        # English FSN/Preferred from SCT-Int
-        eng_desc = sct_descs.get(snomed_cid)
-        if eng_desc:
-            rec['snomed_fsn']            = eng_desc.get('fsn', '')
-            rec['snomed_preferred_term'] = eng_desc.get('preferred', '') or eng_desc.get('fsn', '')
-            rec['snomed_module']         = eng_desc.get('module', '')
-            vsct_syns = vsct_descs.get(snomed_cid, {}).get('synonyms', [])
-            all_syns  = eng_desc.get('synonyms', []) + vsct_syns
+        # FIX-03: English FSN/Preferred from SCT-Int with fallback to VSCT-en
+        # (VSCT Extension concepts may not be in SCT-Int)
+        sct_desc  = sct_descs.get(snomed_cid) or {}
+        vsct_desc = vsct_descs.get(snomed_cid) or {}
+        best_desc = sct_desc if sct_desc.get('fsn') else vsct_desc
+        if best_desc.get('fsn'):
+            rec['snomed_fsn']            = best_desc.get('fsn', '')
+            rec['snomed_preferred_term'] = best_desc.get('preferred', '') or best_desc.get('fsn', '')
+            rec['snomed_module']         = best_desc.get('module', '')
+            vsct_syns = vsct_desc.get('synonyms', [])
+            all_syns  = sct_desc.get('synonyms', []) + vsct_syns
             rec['snomed_all_synonyms']   = ' | '.join(all_syns)
 
         # Extract semantic type from FSN tag e.g. (disorder), (finding)
@@ -378,7 +386,9 @@ def build():
             rec['sapdt_fsn'] or sapdt_cid
         )
 
-    # 4b. VSCT-only concepts (not in SA-PDT) — English terms from SCT-Int
+    # 4b. VSCT-only concepts (not in SA-PDT)
+    # FIX-02: English terms from SCT-Int with fallback to VSCT-en
+    # (VSCT Extension-specific concepts won't exist in SCT-Int)
     vsct_only_added = 0
     seen_sapdt_cids = {r['snomed_concept_id'] for r in sapdt.values()}
 
@@ -389,11 +399,14 @@ def build():
         conc_src    = vsct_concs.get(snomed_cid, {})
         active_flag = 'Yes' if conc_src.get('active') == '1' else 'No'
 
-        eng_desc  = sct_descs.get(snomed_cid, {})
-        fsn       = eng_desc.get('fsn', '')
-        preferred = eng_desc.get('preferred', '') or fsn
-        vsct_syns = vsct_descs.get(snomed_cid, {}).get('synonyms', [])
-        all_syns  = eng_desc.get('synonyms', []) + vsct_syns
+        # FIX-02: Fallback ไป vsct_descs เมื่อไม่พบใน sct_descs
+        sct_desc  = sct_descs.get(snomed_cid, {})
+        vsct_desc = vsct_descs.get(snomed_cid, {})
+        fsn       = sct_desc.get('fsn', '') or vsct_desc.get('fsn', '')
+        preferred = (sct_desc.get('preferred', '') or sct_desc.get('fsn', '') or
+                     vsct_desc.get('preferred', '') or vsct_desc.get('fsn', ''))
+        vsct_syns = vsct_desc.get('synonyms', [])
+        all_syns  = sct_desc.get('synonyms', []) + vsct_syns
 
         sem_match = re.search(r'\(([^)]+)\)$', fsn)
         sem_type  = sem_match.group(1) if sem_match else ''
@@ -617,11 +630,21 @@ def build():
     else:
         os.rename(DB_TEMP, DB_OUT)
 
+    # --- Auto Compress to .gz ---
+    gz_out = DB_OUT + '.gz'
+    log(f'Compressing database to {os.path.basename(gz_out)}...')
+    import gzip, shutil
+    with open(DB_OUT, 'rb') as f_in:
+        with gzip.open(gz_out, 'wb', compresslevel=9) as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    gz_size = os.path.getsize(gz_out) / (1024 * 1024)
+
     elapsed = time.time() - t0
     log('')
     log('=' * 60)
     log(f'✅ Build complete in {elapsed:.1f}s')
     log(f'   Output: {DB_OUT}')
+    log(f'   Compressed: {gz_out} ({gz_size:.1f} MB)')
     log(f'   terms: {rows_inserted:,} | relationships: {rel_count:,} | concept_terms: {ct_count:,}')
     log('=' * 60)
 
