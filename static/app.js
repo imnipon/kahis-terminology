@@ -915,6 +915,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ===== USER GUIDE MODAL =====
+    const openUserGuideBtn    = document.getElementById('openUserGuideBtn');
+    const userGuideModal      = document.getElementById('userGuideModal');
+    const closeUserGuideBtn   = document.getElementById('closeUserGuideBtn');
+    const dismissUserGuideBtn = document.getElementById('dismissUserGuideBtn');
+
+    if (openUserGuideBtn && userGuideModal) {
+        openUserGuideBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            userGuideModal.classList.remove('hidden');
+        });
+
+        const hideUserGuideModal = () => userGuideModal.classList.add('hidden');
+
+        if (closeUserGuideBtn)   closeUserGuideBtn.addEventListener('click', hideUserGuideModal);
+        if (dismissUserGuideBtn) dismissUserGuideBtn.addEventListener('click', hideUserGuideModal);
+
+        userGuideModal.addEventListener('click', (e) => {
+            if (e.target === userGuideModal) {
+                hideUserGuideModal();
+            }
+        });
+    }
+
     // Helper
     function escapeHtml(str) {
         if (!str) return '';
