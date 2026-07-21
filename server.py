@@ -784,6 +784,20 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
 def run():
     if not os.path.exists(DB_FILE):
         gz_file = DB_FILE + '.gz'
+        if not os.path.exists(gz_file):
+            db_url = os.environ.get(
+                "DB_DOWNLOAD_URL",
+                "https://github.com/imnipon/kahis-terminology/releases/download/v1.0/terminology_search.db.gz"
+            )
+            print(f"[INFO] Database not found. Downloading from release URL: {db_url} ...")
+            try:
+                import urllib.request
+                urllib.request.urlretrieve(db_url, gz_file)
+                print(f"[INFO] Download completed: {os.path.getsize(gz_file)/(1024*1024):.1f} MB")
+            except Exception as e:
+                print(f"ERROR: Failed to download database from {db_url}: {e}")
+                sys.exit(1)
+
         if os.path.exists(gz_file):
             print(f"[INFO] Unpacking database: {gz_file} -> {DB_FILE} ...")
             import gzip, shutil
