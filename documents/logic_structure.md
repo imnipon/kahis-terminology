@@ -2,7 +2,7 @@
 
 > **เอกสารข้อกำหนดสถาปัตยกรรม Logic และคู่มือการปฏิบัติงานมาตรฐาน (SOP / WI)**
 > สำหรับระบบบริหารจัดการและค้นหาข้อมูลคำศัพท์สัตวแพทย์ **KAHIS (SA-PDT & SNOMED CT Veterinary Extension)**
-> **เวอร์ชันเอกสาร**: 4.1.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
+> **เวอร์ชันเอกสาร**: 4.2.0 | **วันอัปเดต**: 2026-07-21 | **สถานะ**: อนุมัติสเปก (Pending Execution Approval)
 
 ---
 
@@ -296,5 +296,79 @@ Synonyms & Aliases:
 
 ---
 
-### 📌 สรุปสถานะระบบและการดำเนินการขั้นถัดไป
-เอกสารข้อกำหนดสถาปัตยกรรม Logic และคู่มือการปฏิบัติงานมาตรฐาน (`logic_structure.md`) เวอร์ชัน 4.1.0 ถูกอัปเดตระบบส่งออกเฉพาะ `ku_custom_synonyms.csv` เรียบร้อยแล้ว ขณะนี้ระบบ **พร้อมรอคำสั่งการอนุมัติเพื่อเริ่มลงมือพัฒนาและปรับปรุงโค้ดตามสเปกนี้ได้ทันทีครับ!**
+
+---
+
+## 10. สถาปัตยกรรมไร้ฐานข้อมูลใน Git และระบบ Auto-Download DB บน Render.com (Deployment Architecture & Auto-Fetch Engine)
+
+### 10.1 นโยบายการจัดการไฟล์ฐานข้อมูล (Git Database Exclusion Policy)
+
+1. **ไม่ Track ไฟล์ `.db` และ `.db.gz` ใน Git Repository**:
+   - เนื่องจาก `terminology_search.db` มีขนาดใหญ่ (~204 MB) เกินขีดจำกัดของ GitHub (100 MB Limit)
+   - ไฟล์ `terminology_search.db.gz` (~51 MB) ไม่ควรดันเข้า Git Repo เพื่อป้องกันไม่ให้ประวัติ Git พองโตโดยไม่จำเป็น
+   - ไฟล์ทั้งสองจะถูกระบุไว้ใน `.gitignore`:
+     ```gitignore
+     terminology_search.db
+     terminology_search.db.gz
+     *.db
+     *.db.gz
+     ```
+
+### 10.2 การสร้าง DB และการบีบอัดอัตโนมัติ (Auto-Build & Auto-Compression Engine)
+
+เมื่อรันสคริปต์ `scripts/build_direct_db.py` หรือกดปุ่ม **Rebuild DB** ผ่านหน้า `admin.html`:
+1. ระบบจะประมวลผลข้อมูลจาก 3 แหล่งสร้างไฟล์ `terminology_search.db` (204 MB)
+2. เมื่อสร้างเสร็จ สคริปต์จะทำการ **บีบอัดไฟล์เป็น `terminology_search.db.gz` (51 MB) ให้อัตโนมัติทันที** ในขั้นตอนเดียว (ใช้ `gzip -9` compression)
+3. สำรองไฟล์ทั้งสองไว้ที่ `backup/terminology_search_YYYYMMDD_HHMMSS.db` และ `.db.gz`
+
+### 10.3 ระบบดาวน์โหลดฐานข้อมูลอัตโนมัติขณะเปิดเซิร์ฟเวอร์ (Automatic Release DB Fetcher)
+
+สำหรับสภาพแวดล้อมระบบคลาวด์ เช่น **Render.com (Free Plan)** ซึ่งไม่มีไฟล์ DB ใน Git Repo และไม่รองรับ SSH Shell:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as server.py (Render.com)
+    participant GH as GitHub Release (v1.0)
+    participant FS as Local Filesystem (Server)
+
+    App->>FS: ตรวจสอบว่ามี terminology_search.db หรือไม่?
+    alt มีไฟล์ DB อยู่แล้ว
+        FS-->>App: อ่าน DB และเริ่มรัน HTTP Server ทันที
+    else ไม่มีไฟล์ DB
+        App->>FS: ตรวจสอบว่ามี terminology_search.db.gz หรือไม่?
+        alt ไม่มีไฟล์ .gz
+            App->>GH: ดาวน์โหลด .gz จาก Release URL อัตโนมัติ (DB_DOWNLOAD_URL)
+            GH-->>FS: บันทึกไฟล์ terminology_search.db.gz (50.9 MB)
+        end
+        App->>FS: สั่ง unpack .db.gz เป็น terminology_search.db
+        FS-->>App: แตกไฟล์เสร็จสมบูรณ์ -> เริ่มรัน HTTP Server
+    end
+```
+
+#### กลไกใน `server.py` (Line 784-798):
+```python
+def run():
+    if not os.path.exists(DB_FILE):
+        gz_file = DB_FILE + '.gz'
+        if not os.path.exists(gz_file):
+            db_url = os.environ.get(
+                "DB_DOWNLOAD_URL",
+                "https://github.com/imnipon/kahis-terminology/releases/download/v1.0/terminology_search.db.gz"
+            )
+            print(f"[INFO] Database not found. Downloading from release URL: {db_url} ...")
+            import urllib.request
+            urllib.request.urlretrieve(db_url, gz_file)
+
+        if os.path.exists(gz_file):
+            print(f"[INFO] Unpacking database: {gz_file} -> {DB_FILE} ...")
+            import gzip, shutil
+            with gzip.open(gz_file, 'rb') as f_in:
+                with open(DB_FILE, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+```
+
+---
+
+### 📌 สรุปสถานะการใช้งาน
+ขณะนี้ระบบ KAHIS Terminology ถูกปรับแต่งสถาปัตยกรรม ให้รองรับการอัปเดตระบบแบบ Zero-Downtime บน Render.com โดยอัตโนมัติเรียบร้อยแล้ว!
