@@ -2,14 +2,12 @@
 # KAHIS Terminology App — .gitignore
 # ============================================================
 
-# ----- Database files (binary data files, do not push to git) -----
-terminology_search.db
-terminology_search.db.gz
+# ----- Database files (ignore 200MB raw .db, allow compressed .db.gz < 100MB) -----
 *.db
-*.db.gz
+*.db.building
 
-# ----- Backup files ----------------------------------------
-backup/
+# ----- Backup files (ignore raw .db backups, allow compressed .db.gz backups) -----
+backup/*.db
 
 # ----- macOS system files ----------------------------------
 .DS_Store

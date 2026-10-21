@@ -439,56 +439,25 @@
 </head>
 <body>
 
-<!-- ===== PIN OVERLAY ===== -->
-<div id="pin-overlay">
-    <div class="pin-card">
-        <div class="pin-icon">🔐</div>
-        <div class="pin-title">Admin Access</div>
-        <div class="pin-sub">KAHIS Terminology — กรอก PIN เพื่อเข้าใช้งาน</div>
-        <div class="pin-dots" id="pin-dots">
-            <div class="pin-dot" id="dot-0"></div>
-            <div class="pin-dot" id="dot-1"></div>
-            <div class="pin-dot" id="dot-2"></div>
-            <div class="pin-dot" id="dot-3"></div>
-            <div class="pin-dot" id="dot-4"></div>
-            <div class="pin-dot" id="dot-5"></div>
-            <div class="pin-dot" id="dot-6"></div>
-            <div class="pin-dot" id="dot-7"></div>
-        </div>
-        <div class="pin-grid">
-            <button class="pin-btn" data-val="1">1</button>
-            <button class="pin-btn" data-val="2">2</button>
-            <button class="pin-btn" data-val="3">3</button>
-            <button class="pin-btn" data-val="4">4</button>
-            <button class="pin-btn" data-val="5">5</button>
-            <button class="pin-btn" data-val="6">6</button>
-            <button class="pin-btn" data-val="7">7</button>
-            <button class="pin-btn" data-val="8">8</button>
-            <button class="pin-btn" data-val="9">9</button>
-            <button class="pin-btn" data-val="⌫" style="font-size:14px">⌫</button>
-            <button class="pin-btn" data-val="0">0</button>
-            <button class="pin-btn" data-val="✓" style="color:var(--accent)">✓</button>
-        </div>
-        <div class="pin-error" id="pin-error"></div>
-    </div>
+<!-- ===== PIN OVERLAY (Disabled in v6.0 Internal Admin Builder Mode) ===== -->
+<div id="pin-overlay" class="hidden" style="display:none">
 </div>
 
 <!-- ===== TOAST ===== -->
 <div id="toast"></div>
 
 <!-- ===== MAIN APP ===== -->
-<div id="app">
+<div id="app" class="visible">
 
     <!-- Topbar -->
     <div class="topbar">
         <span class="topbar-logo">KAHIS Terminology</span>
-        <span class="topbar-sub">Admin Panel</span>
-        <span class="app-ver-badge">v4.9.0</span>
+        <span class="topbar-sub">Admin DB Builder & Panel</span>
+        <span class="app-ver-badge">v6.0</span>
         <div class="topbar-right">
             <button class="btn-launch" id="btn-open-app" onclick="window.open('index.html','_blank')">
-                🚀 เปิด User App
+                🚀 เปิดหน้าทดสอบ Browser (User App)
             </button>
-            <button class="btn-lock" id="btn-lock">🔒 ล็อก</button>
         </div>
     </div>
 
@@ -650,6 +619,37 @@
                 <div class="log-area" id="rebuild-log" style="display:none"></div>
             </div>
 
+            <!-- Verify DB (QA Audit) -->
+            <div class="action-card">
+                <div class="action-card-header">
+                    <span class="action-icon">🔍</span>
+                    <span class="action-title">Verify Database (QA Audit 34 จุด)</span>
+                </div>
+                <div class="action-desc">
+                    ตรวจสอบความสมบูรณ์ของฐานข้อมูลครบ 5 มิติ (Schema 32 คอลัมน์, จำนวนข้อมูลครบ 42,299 แถว, ไม่มีฟิลด์ว่าง, กฎ Display Name/FSN และ FTS5 Search)
+                </div>
+                <button class="btn-action btn-blue" id="btn-verify" onclick="runVerify()">
+                    🔍 ตรวจสอบความถูกต้อง DB
+                </button>
+                <div class="log-area" id="verify-log" style="display:none; max-height:260px;"></div>
+            </div>
+
+            <!-- Export Master CSV -->
+            <div class="action-card">
+                <div class="action-card-header">
+                    <span class="action-icon">📦</span>
+                    <span class="action-title">Export Master CSV (32 คอลัมน์)</span>
+                </div>
+                <div class="action-desc">
+                    ส่งออกตาราง <code style="color:var(--accent)">terms</code> ทั้งหมด (42,299+ รายการ) เป็นไฟล์<br>
+                    <code style="color:var(--accent)">master_kahis_terminology.csv</code>
+                </div>
+                <button class="btn-action btn-green" id="btn-export-master" onclick="runExport('master')">
+                    📦 Export Master CSV
+                </button>
+                <div class="log-area" id="export-master-log" style="display:none"></div>
+            </div>
+
             <!-- Export KU Synonyms CSV -->
             <div class="action-card">
                 <div class="action-card-header">
@@ -717,76 +717,8 @@
 <script>
     // ===== CONFIG =====
     const API_BASE = '';
-    const CORRECT_PIN = '53027918';
 
-    // ===== PIN LOGIC =====
-    let pinBuffer = '';
-    const pinOverlay = document.getElementById('pin-overlay');
-    const pinError   = document.getElementById('pin-error');
-
-    function updateDots() {
-        for (let i = 0; i < 8; i++) {
-            document.getElementById(`dot-${i}`).classList.toggle('filled', i < pinBuffer.length);
-        }
-    }
-
-    document.querySelectorAll('.pin-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const val = btn.dataset.val;
-            pinError.textContent = '';
-            if (val === '⌫') {
-                pinBuffer = pinBuffer.slice(0, -1);
-            } else if (val === '✓') {
-                checkPin();
-            } else if (pinBuffer.length < 8) {
-                pinBuffer += val;
-                if (pinBuffer.length === 8) checkPin();
-            }
-            updateDots();
-        });
-    });
-
-    document.addEventListener('keydown', e => {
-        if (!pinOverlay.classList.contains('hidden')) {
-            if (e.key >= '0' && e.key <= '9' && pinBuffer.length < 8) {
-                pinBuffer += e.key;
-                updateDots();
-                if (pinBuffer.length === 8) checkPin();
-            } else if (e.key === 'Backspace') {
-                pinBuffer = pinBuffer.slice(0, -1);
-                updateDots();
-            } else if (e.key === 'Enter') {
-                checkPin();
-            }
-        }
-    });
-
-    function checkPin() {
-        if (pinBuffer === CORRECT_PIN) {
-            pinOverlay.classList.add('hidden');
-            document.getElementById('app').classList.add('visible');
-            loadDashboard();
-        } else {
-            pinError.textContent = '❌ PIN ไม่ถูกต้อง กรุณาลองใหม่';
-            pinBuffer = '';
-            updateDots();
-            // Shake animation
-            const card = document.querySelector('.pin-card');
-            card.style.animation = 'none';
-            card.offsetHeight; // reflow
-            card.style.animation = 'shake 0.4s ease';
-        }
-    }
-
-    document.getElementById('btn-lock').addEventListener('click', () => {
-        pinBuffer = '';
-        updateDots();
-        pinError.textContent = '';
-        pinOverlay.classList.remove('hidden');
-        document.getElementById('app').classList.remove('visible');
-    });
-
-    // ===== DASHBOARD LOAD =====
+    // ===== DASHBOARD LOAD (No PIN lock in v6.0 Internal Admin Builder Mode) =====
     window.addEventListener('DOMContentLoaded', () => {
         loadDashboard();
     });
@@ -1022,6 +954,40 @@
             btn.textContent = '🔨 Rebuild DB ใหม่';
             btn.className = 'btn-action btn-red';
         };
+    }
+
+    // ===== VERIFY DB (QA Audit) =====
+    async function runVerify() {
+        const logEl = document.getElementById('verify-log');
+        const btn   = document.getElementById('btn-verify');
+        logEl.style.display = 'block';
+        logEl.innerHTML = '';
+        btn.disabled = true;
+        appendLog(logEl, 'info', '⏳ กำลังตรวจสอบความถูกต้องฐานข้อมูล 34 จุด (QA Audit)…');
+        try {
+            const res  = await fetch(`${API_BASE}/api/admin/verify`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            logEl.innerHTML = '';
+            const lines = (data.report || '').split(/\r?\n/);
+            lines.forEach(line => {
+                if (!line) return;
+                let type = 'info';
+                if (line.includes('✅') || line.includes('🎉')) type = 'ok';
+                else if (line.includes('❌')) type = 'err';
+                else if (line.includes('⚠️')) type = 'warn';
+                appendLog(logEl, type, line);
+            });
+            if (data.ok) {
+                showToast('✅ ผ่านการตรวจสอบครบทุกจุด!', 'ok');
+            } else {
+                showToast('⚠️ พบจุดที่ต้องตรวจสอบในรายงาน', 'err');
+            }
+        } catch(e) {
+            appendLog(logEl, 'err', `❌ ${e.message}`);
+            showToast('❌ ตรวจสอบไม่สำเร็จ', 'err');
+        }
+        btn.disabled = false;
     }
 
     // ===== EXPORT =====

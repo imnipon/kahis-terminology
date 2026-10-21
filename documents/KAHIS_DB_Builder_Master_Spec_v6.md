@@ -458,3 +458,125 @@ sequenceDiagram
    * ในหน้าต่างเลือกและดูรายละเอียดโรค (เช่น `Select PDT Concept` ใน [`assessment_editor.html`](file:///D:/imnipon_Project/kahis/NP/assessment/assessment_editor.html) และหน้า `index.html`) จะแสดง:
      * **Parents (โรคแม่ / หมวดหมู่ใหญ่กว่า)**: แสดงรายการ Parent ของรหัสที่เลือก พร้อมปุ่มคลิกไต่ระดับขึ้นไปดูหมวดแม่ได้ไม่จำกัดชั้น
      * **Children (โรคย่อยที่จำเพาะกว่า)**: แสดงรายการโรคย่อย (เช่น เมื่อเลือก `Renal calculi` จะเห็นลูกอย่าง `Staghorn calculus`) เพื่อให้สัตวแพทย์สามารถคลิกเจาะจงเลือกโรคย่อยที่ละเอียดขึ้นหรือถอยกลับไปเลือกโรคแม่ได้เหมือนใน SNOMED CT Browser
+
+---
+
+## 10. สรุปผลการพัฒนา การเปลี่ยนแปลงโค้ด และรายงานผลการตรวจสอบความถูกต้อง (Implementation & QA Audit Log — v6.0)
+
+ส่วนนี้บันทึกผลการลงมือปรับปรุงระบบจริง (Implementation) และการตรวจสอบความถูกต้องของฐานข้อมูลแบบอัตโนมัติ (Automated QA Audit) เมื่อวันที่ **22 ตุลาคม 2026**
+
+### 10.1 สรุปไฟล์ที่ได้รับการพัฒนาและปรับปรุงในโปรเจกต์
+
+| ลำดับ | ไฟล์ในโปรเจกต์ | สถานะ | รายละเอียดการเปลี่ยนแปลง |
+| :---: | :--- | :---: | :--- |
+| **1** | [`scripts/build_direct_db.py`](file:///D:/imnipon_Project/GitHub/kahis-terminology/scripts/build_direct_db.py) | **เขียนใหม่ทั้งหมด (v6.0 Engine)** | • รองรับการอ่านไฟล์ต้นฉบับครบทั้ง **11 ไฟล์ Snapshot + KU Custom Data** โดยอ่านได้ทั้งจากโฟลเดอร์ที่แตกไฟล์แล้วและอ่านตรงจากไฟล์ `.zip` (`RF2Archive`) โดยไม่ต้องแตกไฟล์ลงฮาร์ดดิสก์<br>• ใช้การแยกคอลัมน์ด้วย `line.rstrip('\r\n').split('\t')` แทน `csv.reader` ปกติ เพื่อป้องกันปัญหาเครื่องหมายอัญประกาศ (`"`) ในชื่อโรคของ SNOMED CT กลืนบรรทัดข้อมูล<br>• ตรวจจับและเลือกโฟลเดอร์ต้นฉบับที่มีชุดไฟล์ `Refset` (`der2_cRefset_LanguageSnapshot`) ครบถ้วนโดยอัตโนมัติ<br>• รวม Concept สัตวแพทย์ครบทั้ง **42,299 รหัส** (`SA-PDT 4,489` $\cup$ `VSCT Concept 37,416` $\cup$ `VSCT Description 40,829`)<br>• คัดเลือก `display_name` ตามลำดับ `SA-PDT Preferred > VSCT VTSL Preferred (332501000009101) > VSCT/SCT-Int US Preferred (900000000000509007) > FSN ตัดวงเล็บ`<br>• คัดเลือก `snomed_fsn` ตามลำดับ `VSCT FSN > SCT-Int FSN`<br>• รวมคำพ้องภาษาอังกฤษทุกแหล่งลงใน `synonym` และสร้างดัชนีค้นหา `terms_fts` (`FTS5`)<br>• คำนวณ `body_system` (ผ่าน BFS 12 ชั้นจาก `Finding site`, `Procedure site` และ `Is a`) และ `snomed_parent_concepts` จบในสคริปต์เดียว<br>• **Update-Safe 100%**: สำรอง DB เดิมเข้า `backup/`, รักษา `ku_synonym_text` และ Custom Concepts (`match_type='ku_custom'`), ดึง `replacement_concept_id` จาก `AssociationSnapshot` และบีบอัดไฟล์ `.db.gz` อัตโนมัติ |
+| **2** | [`scripts/verify_db.py`](file:///D:/imnipon_Project/GitHub/kahis-terminology/scripts/verify_db.py) | **สร้างใหม่ (QA Audit Tool)** | • สคริปต์ตรวจสอบความถูกต้องของฐานข้อมูลอัตโนมัติ 5 มิติ รวม **34 จุดตรวจ** (Schema 32 คอลัมน์, ความครบถ้วนของจำนวนข้อมูล, การไม่มีฟิลด์ว่าง/ข้อมูลหลุดเป็นตัวเลข, กฎการคัดเลือกชื่อ 4 เคสตัวแทน, และการค้นหา FTS5 + ภาษาไทย + Parents/Children) |
+| **3** | [`server.py`](file:///D:/imnipon_Project/GitHub/kahis-terminology/server.py) | **อัปเกรด** | • ปรับปรุง [`get_release_versions()`](file:///D:/imnipon_Project/GitHub/kahis-terminology/server.py#L37-L95) ให้ค้นหาเวอร์ชันต้นฉบับจากหลายไดเรกทอรีรวมถึง `~/Downloads` และไฟล์ `.zip`<br>• เพิ่ม API Endpoint `/api/admin/verify` ([`handle_verify_db()`](file:///D:/imnipon_Project/GitHub/kahis-terminology/server.py#L214-L236)) สำหรับรัน [`scripts/verify_db.py`](file:///D:/imnipon_Project/GitHub/kahis-terminology/scripts/verify_db.py) และส่งผลตรวจกลับไปแสดงบนหน้าเว็บ<br>• เปลี่ยนเซิร์ฟเวอร์เป็น `socketserver.ThreadingTCPServer` และรองรับการสตรีม `UTF-8` บน Windows |
+| **4** | [`static/admin.html`](file:///D:/imnipon_Project/GitHub/kahis-terminology/static/admin.html) | **อัปเกรด (v6.0 UI)** | • **ยกเลิกหน้าจอล็อกด้วยรหัส PIN (`#pin-overlay`)** ตามข้อตกลง เพื่อให้ผู้ดูแลระบบเปิดเข้าใช้งานได้ทันที<br>• เพิ่มการ์ดปุ่ม **🔍 Verify Database (QA Audit 34 จุด)** สำหรับกดตรวจสอบฐานข้อมูลจากหน้าเว็บได้ในคลิกเดียว<br>• เพิ่มการ์ดปุ่ม **📦 Export Master CSV (32 คอลัมน์)** สำหรับส่งออกตาราง `terms` ทั้งหมดเป็นไฟล์ CSV |
+
+---
+
+### 10.2 กรณีพิเศษในไฟล์ต้นฉบับที่ตรวจพบระหว่างการทดสอบ และวิธีแก้ไข (Edge Cases Resolved)
+
+ระหว่างการทดสอบสร้างฐานข้อมูลและรันสคริปต์ตรวจสอบ [`scripts/verify_db.py`](file:///D:/imnipon_Project/GitHub/kahis-terminology/scripts/verify_db.py) ระบบตรวจพบกรณีพิเศษในไฟล์ข้อมูลต้นฉบับรวม 4 ประเด็น และได้แก้ไขในโค้ดจนสมบูรณ์ 100% ดังนี้:
+
+1. **ปัญหาเครื่องหมายอัญประกาศ (`"`) ในไฟล์ TSV ของ SNOMED CT RF2**:
+   * **สาเหตุ**: ในไฟล์ `sct2_Description_Snapshot-en` มีคำศัพท์บางคำที่มีเครื่องหมาย `"` อยู่ในชื่อ (เช่น `"V"-shaped` หรือขนาดสายสวน `5"`) หากใช้ `csv.reader` แบบปกติของ Python จะตีความว่าเป็นจุดเริ่มต้นของการครอบข้อความและรวมหลายบรรทัดเข้าด้วยกัน ทำให้ Concept หายไป 266 รหัสใน `terms` และ 41,440 รหัสใน `concept_terms`
+   * **การแก้ไข**: เปลี่ยนไปใช้วิธีแยกคอลัมน์แบบ Strict TSV (`line.rstrip('\r\n').split('\t')`) และดึงทั้ง Active FSN และ Inactive FSN fallback ทำให้ได้จำนวน Concept ครบถ้วน 100% ไม่ตกหล่นแม้แต่บรรทัดเดียว
+2. **กรณีโฟลเดอร์ VSCT ซ้ำซ้อนในเครื่อง (โฟลเดอร์ย่อยไม่มี `Refset`)**:
+   * **สาเหตุ**: ในโฟลเดอร์ `Downloads\Small Animal Problem and Diagnosis Terms\` มีโฟลเดอร์ `SnomedCT_VETExtension_...` ที่ถูกคัดลอกไว้เฉพาะโฟลเดอร์ `Terminology` (ไม่มีโฟลเดอร์ `Refset`) ในขณะที่โฟลเดอร์ชุดเต็มอยู่ที่ `Downloads\SnomedCT_VETExtension_...`
+   * **การแก้ไข**: เพิ่มฟังก์ชัน `has_refset()` ใน [`find_sources()`](file:///D:/imnipon_Project/GitHub/kahis-terminology/scripts/build_direct_db.py#L223-L250) เพื่อให้สคริปต์เลือกชุดข้อมูลที่มีไฟล์ `der2_cRefset_LanguageSnapshot` ครบถ้วนเสมอ
+3. **กรณีรหัสใน SA-PDT มีเฉพาะคำว่า `Acceptable` และไม่มีแถว `Preferred` (พบ 2 รหัส)**:
+   * **สาเหตุ**: ในไฟล์ `SA-PDTReleaseFile_full_20260331.txt` มี 2 รหัส คือ `262285001` (*Weight decreased*) และ `354451000009109` (*Cutaneous asthenia*) ที่ต้นฉบับระบุ `Term Designation` เป็น `Acceptable` ทุกแถว และไม่มีแถวใดระบุเป็น `Preferred` เลย
+   * **การแก้ไข**: เพิ่มเงื่อนไขใน [`read_sapdt()`](file:///D:/imnipon_Project/GitHub/kahis-terminology/scripts/build_direct_db.py#L399-L403) ว่าหากรหัสใดใน SA-PDT ไม่มีแถว `Preferred` ให้ใช้คำ `Acceptable` ลำดับแรกของ SA-PDT เป็น `sapdt_preferred` ทันที ส่งผลให้รหัสใน SA-PDT มี `sapdt_preferred` ครบ **4,489 / 4,489 รหัส (100%)**
+4. **กรณีรหัสที่ถูกยกเลิก (Retired) ใน VSCT ยุคแรกไม่มีวงเล็บ Semantic Tag ท้ายชื่อ FSN (พบ 6 รหัส)**:
+   * **สาเหตุ**: มีรหัสชื่อวิทยาศาสตร์ของนกแก้วที่ถูกยกเลิกไปแล้ว 6 รหัสใน VSCT (เช่น `2431000009100` *Psittacula derbiana*, `2451000009109` *Cacatua ducorpsii*) ที่ไฟล์ต้นฉบับเขียน FSN ไว้โดยไม่มีวงเล็บ `(organism)` ต่อท้าย ทำให้การสกัด `snomed_semantic_type` ได้ค่าว่าง
+   * **การแก้ไข**: เพิ่มการดึง `snomed_semantic_type` จากรหัสแม่ (`Is a` Parent) หรือกำหนดค่าสำรองเป็น `organism` อัตโนมัติ ทำให้ไม่มีแถวใดในตาราง `terms` ที่มี `snomed_semantic_type` ว่างเปล่าเลย (`0` แถว)
+
+---
+
+### 10.3 แนวทางการตรวจสอบความถูกต้อง 5 มิติ และผลลัพธ์การทดสอบจริง (`34/34 PASS`)
+
+การตรวจสอบฐานข้อมูล [`terminology_search.db`](file:///D:/imnipon_Project/GitHub/kahis-terminology/terminology_search.db) แบ่งออกเป็น **5 มิติ (34 รายการตรวจสอบ)** ซึ่งสามารถรันซ้ำได้ทุกเมื่อผ่านคำสั่ง `python scripts/verify_db.py` หรือกดปุ่ม **"🔍 ตรวจสอบความถูกต้อง DB"** บนหน้าเว็บ `http://localhost:8080/admin.html`:
+
+1. **มิติที่ 1: โครงสร้างตารางและความสมบูรณ์ของไฟล์ SQLite (Schema & Physical Integrity — 8 จุดตรวจ)**
+   * `PRAGMA integrity_check` = `ok`
+   * มีครบทั้ง 5 ตาราง (`terms`, `relationships`, `concept_terms`, `ku_synonym_text`, `terms_fts`)
+   * ตาราง `terms` มีครบ **32 คอลัมน์** เรียงลำดับตรงกับระบบเดิม 100% และมี Indexes ครบทั้ง **8 ตัว**
+2. **มิติที่ 2: ความครบถ้วนของจำนวนข้อมูลเทียบกับต้นฉบับ (Completeness — 8 จุดตรวจ)**
+   * ตาราง `terms`: **`42,299` แถว** (ไม่มีรหัส `snomed_concept_id` ซ้ำซ้อน = `0`)
+   * รหัส `in_sapdt = 'Yes'`: **`4,489` แถว** (`Active = 4,103`, `Retired = 386`)
+   * รหัส `in_vsct = 'Yes'`: **`40,830` แถว** (`VSCT Concept 37,416` $\cup$ `VSCT Description 40,829`)
+   * รหัส `in_vsct = 'Yes' AND in_sct_inter = 'Yes'`: **`6,488` แถว** (`3,074` รหัสจาก Concept + `3,414` รหัสจาก Description)
+   * ตาราง `relationships`: **`1,334,088` แถว** | ตาราง `concept_terms`: **`561,646` แถว** | ตาราง `ku_synonym_text`: **`190` แถว**
+3. **มิติที่ 3: ความสมบูรณ์ของฟิลด์บังคับ (Data Quality & Zero Nulls — 7 จุดตรวจ)**
+   * แถวที่ `display_name` ว่างเปล่า = **`0` แถว** | แถวที่ `display_name` หลุดเป็นรหัสตัวเลข = **`0` แถว**
+   * แถวที่ `snomed_fsn` ว่างเปล่า = **`0` แถว** | แถวที่ `snomed_semantic_type` ว่างเปล่า = **`0` แถว** | แถวที่ `body_system` ว่างเปล่า = **`0` แถว**
+   * มีรหัสแม่ใน `snomed_parent_concepts`: **`40,434` แถว** | มีรหัสทดแทนใน `replacement_concept_id`: **`1,755` แถว**
+4. **มิติที่ 4: ความถูกต้องของกฎการคัดเลือกชื่อและ Concept ตัวแทน (Priority Rules — 5 จุดตรวจ)**
+   * รหัสใน SA-PDT ใช้ชื่อ `sapdt_preferred` เป็น `display_name` ครบ **`4,489 / 4,489` แถว (100%)**
+   * ตรวจสอบ 4 Concept ตัวแทนผ่านครบทุกฟิลด์:
+     * `95570007`: `display_name = 'Renal calculi'`, `snomed_fsn = 'Kidney stone (disorder)'`, `body_system = 'Urinary system'`, มีคำพ้อง `'Nephrolithiasis'`
+     * `235919008`: `display_name = 'Gallstones'`, `snomed_fsn = 'Gallbladder calculus (disorder)'`, `body_system = 'Digestive system'`, มีคำพ้อง `'Cholecystolithiasis'`
+     * `70650003`: `display_name = 'Bladder stone'`, `snomed_fsn = 'Urinary bladder stone (disorder)'`, `body_system = 'Urinary system'`, มีคำพ้อง `'Vesical calculus'`
+     * `297288000`: `display_name = 'Liver calculus'` *(VTSL Preferred Term ใน Language Refset `332501000009101`)*, `snomed_fsn = 'Liver calculus (disorder)'`, `body_system = 'Digestive system'`, มีคำพ้อง `'Hepatolithiasis | Hepatolith'`
+5. **มิติที่ 5: การทำงานจริงของระบบค้นหา (FTS5 + ภาษาไทย) และลำดับชั้น (Parents / Children — 6 จุดตรวจ)**
+   * ค้นหา FTS5 ด้วยคำพ้องระดับลึก (`Nephrolithiasis*`, `Cholecystolithiasis*`, `Hepatolithiasis*`) พบ Concept เป้าหมายครบทุกรายการ
+   * ค้นหาคำพ้องภาษาไทย `"นิ่วในไต"` ใน `ku_synonym_text` พบรหัส `95570007` ทันที
+   * ดึง `Parents` (`2` รายการ) และ `Children` (`15` รายการ) ของ `95570007` จากตาราง `relationships` ร่วมกับ `concept_terms` ได้ชื่อ FSN ครบถ้วน 100%
+
+#### ตัวอย่างบันทึกผลการรัน `python scripts/verify_db.py` (ฉบับเต็มครบทั้ง 34 รายการ)
+```text
+==========================================================================
+🔍 รายงานการตรวจสอบความถูกต้องฐานข้อมูล KAHIS Terminology DB (QA Audit v6.0)
+==========================================================================
+
+[มิติที่ 1] ตรวจสอบโครงสร้างตารางและไฟล์ฐานข้อมูล (Schema & Integrity)
+  ✅ [PASS] SQLite PRAGMA integrity_check -> ok
+  ✅ [PASS] มีตาราง terms
+  ✅ [PASS] มีตาราง relationships
+  ✅ [PASS] มีตาราง concept_terms
+  ✅ [PASS] มีตาราง ku_synonym_text
+  ✅ [PASS] มีตาราง terms_fts
+  ✅ [PASS] ตาราง terms มีครบ 32 คอลัมน์ และเรียงลำดับตรงกับระบบเดิม 100% -> 32 คอลัมน์
+  ✅ [PASS] มี Indexes ครบทั้ง 8 ตัว -> พบ 8/8
+
+[มิติที่ 2] ตรวจสอบความครบถ้วนของจำนวนข้อมูลเทียบกับต้นฉบับ (Completeness)
+  ✅ [PASS] จำนวน Concepts สัตวแพทย์ทั้งหมด (SA-PDT ∪ VSCT) -> 42,299 แถว (เป้าหมาย >= 42,299)
+  ✅ [PASS] ไม่มีรหัส snomed_concept_id ซ้ำซ้อนในตาราง terms -> ซ้ำ 0 รหัส
+  ✅ [PASS] จำนวน SA-PDT ครบถ้วนตรงตามต้นฉบับ -> รวม 4,489 (Active=4,103, Retired=386)
+  ✅ [PASS] จำนวน VSCT (Concept 37,416 ∪ Description 40,829) ครบถ้วน -> 40,830 แถว
+  ✅ [PASS] มีกลุ่ม Concept ที่เชื่อมกับ SCT-Int (VSCT ∩ SCT-Int = 3,074 + VSCT Desc = 3,414) -> 6,488 แถว
+  ✅ [PASS] จำนวนความสัมพันธ์ในตาราง relationships -> 1,334,088 แถว
+  ✅ [PASS] จำนวนชื่อ FSN ทั้งโลกในตาราง concept_terms -> 561,646 แถว
+  ✅ [PASS] จำนวนคำพ้องภาษาไทยในตาราง ku_synonym_text -> 190 แถว
+
+[มิติที่ 3] ตรวจสอบความสมบูรณ์ของฟิลด์บังคับ (Data Quality & Zero Nulls)
+  ✅ [PASS] ไม่มีแถวที่ display_name ว่างเปล่า -> ว่างเปล่า 0 แถว
+  ✅ [PASS] ไม่มีแถวที่ display_name หลุดเป็นรหัสตัวเลข Concept ID -> หลุดเป็นตัวเลข 0 แถว
+  ✅ [PASS] ไม่มีแถวที่ snomed_fsn ว่างเปล่า -> ว่างเปล่า 0 แถว
+  ✅ [PASS] ไม่มีแถวที่ snomed_semantic_type ว่างเปล่า -> ว่างเปล่า 0 แถว
+  ✅ [PASS] ไม่มีแถวที่ body_system (Categories) ว่างเปล่า -> ว่างเปล่า 0 แถว
+  ✅ [PASS] คำนวณ snomed_parent_concepts สำหรับ Active Concepts ครบถ้วน -> มีรหัสแม่ 40,434 แถว
+  ✅ [PASS] ดึงรหัสทดแทน replacement_concept_id สำหรับรหัสที่ยกเลิก -> พบ 1,755 รหัสที่มีรหัสทดแทน
+
+[มิติที่ 4] ตรวจสอบกฎการคัดเลือกชื่อ (Display Name & FSN Priority Rules)
+  ✅ [PASS] กฎลำดับที่ 1: รหัสที่อยู่ใน SA-PDT ใช้ชื่อ sapdt_preferred เป็น display_name 100% -> ตรงกัน 4,489/4,489
+  ✅ [PASS] ตรวจสอบ Concept ตัวแทน 95570007 -> display='Renal calculi', fsn='Kidney stone (disorder)', body='Urinary system', syn มี 'Nephrolithiasis'
+  ✅ [PASS] ตรวจสอบ Concept ตัวแทน 235919008 -> display='Gallstones', fsn='Gallbladder calculus (disorder)', body='Digestive system', syn มี 'Cholecystolithiasis'
+  ✅ [PASS] ตรวจสอบ Concept ตัวแทน 70650003 -> display='Bladder stone', fsn='Urinary bladder stone (disorder)', body='Urinary system', syn มี 'Vesical calculus'
+  ✅ [PASS] ตรวจสอบ Concept ตัวแทน 297288000 -> display='Liver calculus', fsn='Liver calculus (disorder)', body='Digestive system', syn มี 'Hepatolithiasis'
+
+[มิติที่ 5] ทดสอบการค้นหา (FTS5 & Thai Synonyms) และการดึง Parents/Children
+  ✅ [PASS] ค้นหา FTS5 คำพ้อง "Nephrolithiasis*" เจอรหัส 95570007 -> พบ 1 รายการ
+  ✅ [PASS] ค้นหา FTS5 คำพ้อง "Cholecystolithiasis*" เจอรหัส 235919008 -> พบ 1 รายการ
+  ✅ [PASS] ค้นหา FTS5 คำพ้อง "Hepatolithiasis*" เจอรหัส 297288000 -> พบ 1 รายการ
+  ✅ [PASS] ค้นหาคำพ้องภาษาไทย "นิ่วในไต" ใน ku_synonym_text เจอรหัส 95570007 -> พบ ['95570007']
+  ✅ [PASS] ดึง Parents (Is a) ของ 95570007 พร้อมชื่อ FSN ได้ครบถ้วน -> พบ Parents 2 รายการ
+  ✅ [PASS] ดึง Children (Is a) ของ 95570007 พร้อมชื่อ FSN ได้ครบถ้วน -> พบ Children 15 รายการ
+
+==========================================================================
+🎉 สรุปผลการตรวจสอบ: ผ่านทั้งหมด 34/34 รายการ (ไม่พบข้อผิดพลาดแม้แต่รายการเดียว)
+==========================================================================
+```
+

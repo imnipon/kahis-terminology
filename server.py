@@ -35,34 +35,58 @@ def get_db():
     return conn
 
 def get_release_versions():
-    """Auto-detect release dates from source folder names under KAHIS_DIR."""
+    """Auto-detect release dates from source folder/zip names across search roots."""
     sapdt_date = "N/A"
     vsct_date  = "N/A"
     sct_date   = "N/A"
 
-    # SA-PDT: look for folder matching SA-PDT* and find 8-digit date inside it
-    sapdt_dirs = glob.glob(os.path.join(KAHIS_DIR, 'SA-PDT*'))
-    if sapdt_dirs:
-        m = re.search(r'(\d{8})', os.path.basename(sapdt_dirs[0]))
-        if m: sapdt_date = m.group(1)
-        else:
-            # Try reading release file name inside the folder
-            rel_files = glob.glob(os.path.join(sapdt_dirs[0], 'SA-PDTReleaseFile_full_*.txt'))
-            if rel_files:
-                m2 = re.search(r'(\d{8})', os.path.basename(rel_files[0]))
-                if m2: sapdt_date = m2.group(1)
+    roots = [
+        APP_DIR,
+        KAHIS_DIR,
+        os.path.dirname(KAHIS_DIR),
+        os.path.expanduser('~/Downloads'),
+    ]
+    roots = [r for r in roots if r and os.path.exists(r)]
 
-    # VSCT: look for SnomedCT_VETExtension_* folder
-    vsct_dirs = glob.glob(os.path.join(KAHIS_DIR, 'SnomedCT_VETExtension_*'))
-    if vsct_dirs:
-        m = re.search(r'(\d{8})', os.path.basename(vsct_dirs[0]))
-        if m: vsct_date = m.group(1)
+    # SA-PDT
+    sapdt_candidates = []
+    for r in roots:
+        for pat in [
+            os.path.join(r, 'SA-PDT*', '**', 'SA-PDTReleaseFile_full_*.txt'),
+            os.path.join(r, 'SA-PDT*', 'SA-PDTReleaseFile_full_*.txt'),
+            os.path.join(r, 'Small Animal Problem*', '**', 'SA-PDTReleaseFile_full_*.txt'),
+            os.path.join(r, 'SA-PDT*'),
+        ]:
+            sapdt_candidates.extend(glob.glob(pat, recursive=True))
+    for cand in sorted(sapdt_candidates, key=lambda p: os.path.basename(p), reverse=True):
+        m = re.search(r'(\d{8})', os.path.basename(cand))
+        if m:
+            sapdt_date = m.group(1)
+            break
 
-    # SCT International: look for SnomedCT_InternationalRF2_* folder
-    sct_dirs = glob.glob(os.path.join(KAHIS_DIR, 'SnomedCT_InternationalRF2_*'))
-    if sct_dirs:
-        m = re.search(r'(\d{8})', os.path.basename(sct_dirs[0]))
-        if m: sct_date = m.group(1)
+    # VSCT
+    vsct_candidates = []
+    for r in roots:
+        for pat in [
+            os.path.join(r, 'SnomedCT_VETExtension_*'),
+            os.path.join(r, 'Small Animal Problem*', 'SnomedCT_VETExtension_*'),
+        ]:
+            vsct_candidates.extend(glob.glob(pat))
+    for cand in sorted(vsct_candidates, key=lambda p: os.path.basename(p), reverse=True):
+        m = re.search(r'(\d{8})', os.path.basename(cand))
+        if m:
+            vsct_date = m.group(1)
+            break
+
+    # SCT International
+    sct_candidates = []
+    for r in roots:
+        sct_candidates.extend(glob.glob(os.path.join(r, 'SnomedCT_InternationalRF2_*')))
+    for cand in sorted(sct_candidates, key=lambda p: os.path.basename(p), reverse=True):
+        m = re.search(r'(\d{8})', os.path.basename(cand))
+        if m:
+            sct_date = m.group(1)
+            break
 
     return {
         'sapdt': f"SA-PDT {sapdt_date}",
@@ -97,6 +121,9 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         elif path == '/api/admin/rebuild':
             # GET /api/admin/rebuild — Server-Sent Events stream of build progress
             self.handle_rebuild_stream()
+        elif path == '/api/admin/verify':
+            # GET /api/admin/verify — Run automated QA audit on terminology_search.db
+            self.handle_verify_db()
         elif path == '/api/ku_synonym':
             # GET /api/ku_synonym?concept_id=XXX  — list ku synonyms for a concept
             cid = query_params.get('concept_id', [''])[0]
@@ -167,6 +194,8 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 bufsize=1
             )
             for line in proc.stdout:
@@ -181,6 +210,30 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 sse('error', f'❌ Exception: {e}')
             except Exception:
                 pass
+
+    def handle_verify_db(self):
+        """GET /api/admin/verify — Run scripts/verify_db.py and return QA audit output."""
+        import subprocess
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts', 'verify_db.py')
+        if not os.path.exists(script):
+            self.send_json({'error': f'verify_db.py not found at {script}'}, status=404)
+            return
+        try:
+            res = subprocess.run(
+                [sys.executable, script],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=60
+            )
+            self.send_json({
+                'ok': res.returncode == 0,
+                'returncode': res.returncode,
+                'report': (res.stdout or '') + (res.stderr or '')
+            })
+        except Exception as e:
+            self.send_json({'error': str(e)}, status=500)
 
     def handle_admin_stats(self):
         """GET /api/admin/stats — returns rich dashboard statistics."""
@@ -910,9 +963,9 @@ def run():
             sys.exit(1)
 
     versions = get_release_versions()
-    socketserver.TCPServer.allow_reuse_address = True
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
     server_address = ('', PORT)
-    httpd = socketserver.TCPServer(server_address, TerminologyHandler)
+    httpd = socketserver.ThreadingTCPServer(server_address, TerminologyHandler)
     print("==================================================")
     print(f"SA-PDT & SNOMED CT Veterinary Extension for KAHIS")
     print(f"Running at : http://localhost:{PORT}")
