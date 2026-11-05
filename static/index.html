@@ -12,6 +12,13 @@
 
     <!-- Stylesheet -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+    <!-- SQL.js (SQLite WebAssembly) for client-side local DB exploration -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
 </head>
 <body>
     <!-- Top Global Header -->
@@ -21,6 +28,20 @@
         </div>
 
         <div class="header-right">
+            <!-- Data Source & Local SQLite Browser Loader -->
+            <div class="db-source-group" id="dbSourceGroup" style="display:flex; align-items:center; gap:8px;">
+                <span class="db-status-pill online" id="dbStatusPill" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 9px; border-radius:12px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:500;">
+                    <span style="width:7px; height:7px; border-radius:50%; background:#22c55e;"></span>
+                    <span id="dbStatusLabel">Online Server</span>
+                </span>
+                <label class="btn-upload-db" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:4px 10px; border-radius:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; cursor:pointer; font-weight:600; transition:all 0.15s;" title="เลือกไฟล์ terminology_search.db จากเครื่องเพื่อค้นหาและทดสอบในเบราว์เซอร์โดยตรง">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>📂 โหลดไฟล์ DB จากเครื่อง</span>
+                    <input type="file" id="localDbFileInput" accept=".db,.sqlite,.sqlite3" style="display:none;">
+                </label>
+                <button id="btnResetServerDb" class="hidden" style="display:none; font-size:11px; padding:4px 8px; border-radius:6px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; cursor:pointer;" title="สลับกลับไปใช้ฐานข้อมูลจากเซิร์ฟเวอร์หลัก">🔄 กลับใช้เซิร์ฟเวอร์</button>
+            </div>
+
             <!-- Release Version Badges Group -->
             <div class="release-badges-group" id="releaseBadgesGroup">
                 <span class="rel-badge badge-sapdt" id="badgeSapdt">SA-PDT 20260331</span>
@@ -276,7 +297,7 @@
                                         <div class="synonyms-block">
                                             <div class="syn-header" style="display:flex; justify-content:space-between; align-items:center;">
                                                 <span>Synonyms & Aliases:</span>
-                                                <button id="btnAddSynonym" class="add-syn-btn" style="background:rgba(255,255,255,0.25); color:#ffffff; border:1px solid rgba(255,255,255,0.5); border-radius:4px; padding:3px 10px; font-size:11px; cursor:pointer; font-weight:600; transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.4)'" onmouseout="this.style.background='rgba(255,255,255,0.25)'">+ เพิ่มคำพ้อง / Add Synonym</button>
+                                                <button id="btnAddSynonym" class="add-syn-btn" style="background:#2563eb; color:#ffffff; border:none; border-radius:5px; padding:4px 10px; font-size:11px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:4px; box-shadow:0 1px 2px rgba(0,0,0,0.1);" title="เสนอคำแปลภาษาไทยหรือคำพ้องคลินิกสำหรับ Concept นี้">💡 เสนอคำพ้องภาษาไทย</button>
                                             </div>
                                             <ul class="syn-list-ul" id="synonymListUl">
                                                 <!-- Synonyms -->
@@ -326,27 +347,37 @@
         </div>
     </footer>
 
-    <!-- ADD SYNONYM MODAL -->
+    <!-- SUGGEST THAI SYNONYM MODAL -->
     <div class="modal-overlay hidden" id="addSynonymModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(4px); z-index:9999; display:flex; align-items:center; justify-content:center;">
-        <div class="modal-card" style="background:#ffffff; border-radius:12px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); width:90%; max-width:440px; overflow:hidden; border:1px solid #e2e8f0;">
+        <div class="modal-card" style="background:#ffffff; border-radius:12px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); width:90%; max-width:480px; overflow:hidden; border:1px solid #e2e8f0;">
             <div class="modal-header" style="padding:14px 18px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                <h3 style="margin:0; font-size:15px; font-weight:700; color:#1e293b;">➕ เพิ่มคำพ้องประจำโครงการ (KU Custom Synonym)</h3>
+                <h3 style="margin:0; font-size:15px; font-weight:700; color:#1e293b;">💡 เสนอคำพ้องภาษาไทย (Suggest Thai Synonym)</h3>
                 <button class="modal-close-btn" id="closeSynonymModalBtn" style="background:none; border:none; font-size:20px; color:#64748b; cursor:pointer;">&times;</button>
             </div>
             <div class="modal-body" style="padding:18px;">
-                <p style="font-size:13px; color:#475569; margin-top:0; margin-bottom:12px;">เพิ่มคำพ้องภาษาไทยหรือภาษาอังกฤษประจำโครงการสำหรับ<br>Concept ID: <strong id="modalConceptIdSpan" style="color:#2563eb;">-</strong></p>
-                
-                <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:4px;">คำพ้อง / Synonym Text:</label>
-                <input type="text" id="synonymInputText" placeholder="เช่น cystic calculi, นิ่วในกระเพาะปัสสาวะ" style="width:100%; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; margin-bottom:12px; box-sizing:border-box;">
-                
-                <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:4px;">รหัส PIN สิทธิ์การบันทึก:</label>
-                <input type="password" id="synonymPinInput" placeholder="ป้อนรหัส PIN" style="width:100%; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; margin-bottom:8px; box-sizing:border-box;">
-                
-                <div id="synonymModalStatus" style="font-size:12px; color:#dc2626; min-height:16px;"></div>
+                <div style="background:#f1f5f9; padding:10px 12px; border-radius:6px; margin-bottom:14px; font-size:12px; color:#334155; line-height:1.5;">
+                    <div>Concept ID: <strong id="modalConceptIdSpan" style="color:#2563eb;">-</strong></div>
+                    <div id="modalConceptNameDiv" style="font-weight:600; color:#0f172a; margin-top:2px;">-</div>
+                </div>
+
+                <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:4px;">คำพ้องภาษาไทยที่ต้องการเสนอ (Thai Synonym) * :</label>
+                <input type="text" id="synonymInputText" placeholder="เช่น นิ่วในกระเพาะปัสสาวะ, ตับอ่อนอักเสบเรื้อรัง" style="width:100%; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; margin-bottom:12px; box-sizing:border-box;">
+
+                <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:4px;">ชื่อผู้เสนอ / แผนก / คลินิก (Submitter, Optional):</label>
+                <input type="text" id="synonymSubmitterInput" placeholder="เช่น น.สพ. นิพนธ์ หรือ หน่วยโรคไต มก." style="width:100%; padding:9px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; margin-bottom:12px; box-sizing:border-box;">
+
+                <label style="font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:4px;">หมายเหตุ / บริบททางคลินิก (Clinical Note, Optional):</label>
+                <textarea id="synonymNoteInput" rows="2" placeholder="เช่น นิยมใช้ระบุในใบส่งตัวหรือเวชระเบียนคลินิกสัตว์เล็ก" style="width:100%; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; margin-bottom:8px; box-sizing:border-box; font-family:inherit; resize:vertical;"></textarea>
+
+                <p style="font-size:11px; color:#64748b; margin:6px 0 0 0; line-height:1.4;">
+                    ℹ️ คำพ้องที่เสนอจะถูกส่งไปยังระบบ <strong>Cloud Firestore</strong> (สถานะ Pending) เพื่อรอการตรวจสอบและบรรจุลงในฐานข้อมูล KAHIS รอบถัดไป
+                </p>
+
+                <div id="synonymModalStatus" style="font-size:12px; color:#dc2626; min-height:16px; margin-top:8px;"></div>
             </div>
             <div class="modal-footer" style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px; background:#f8fafc; border-top:1px solid #e2e8f0;">
                 <button class="btn-secondary" id="cancelSynonymBtn" style="padding:7px 14px; font-size:13px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer; font-weight:500;">ยกเลิก</button>
-                <button class="btn-primary" id="saveSynonymBtn" style="padding:7px 16px; font-size:13px; background:#2563eb; color:#ffffff; border:none; border-radius:6px; font-weight:600; cursor:pointer;">💾 บันทึกคำพ้อง</button>
+                <button class="btn-primary" id="saveSynonymBtn" style="padding:7px 18px; font-size:13px; background:#2563eb; color:#ffffff; border:none; border-radius:6px; font-weight:600; cursor:pointer;">🚀 ส่งข้อเสนอคำพ้อง</button>
             </div>
         </div>
     </div>

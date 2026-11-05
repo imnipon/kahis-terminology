@@ -88,6 +88,14 @@ def get_release_versions():
             sct_date = m.group(1)
             break
 
+    # Fallback to current release versions if source files not found in deployment
+    if sapdt_date == "N/A":
+        sapdt_date = "20260331"
+    if vsct_date == "N/A":
+        vsct_date = "20260331"
+    if sct_date == "N/A":
+        sct_date = "20260701"
+
     return {
         'sapdt': f"SA-PDT {sapdt_date}",
         'vsct':  f"VSCT {vsct_date}",
@@ -98,10 +106,21 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
+    def is_local_client(self):
+        """Check if request originates from localhost / loopback."""
+        client_ip = self.client_address[0] if self.client_address else ''
+        return client_ip in ('127.0.0.1', '::1', 'localhost', 'testclient')
+
     def do_GET(self):
         parsed_url = urllib.parse.urlparse(self.path)
         path = parsed_url.path
         query_params = urllib.parse.parse_qs(parsed_url.query)
+
+        # Enforce localhost-only access for Admin Console and Admin APIs
+        if path.startswith('/api/admin') or path in ('/admin.html', '/admin'):
+            if not self.is_local_client():
+                self.send_json({'error': 'Forbidden: Admin access is restricted to localhost'}, status=403)
+                return
 
         if path == '/api/search':
             self.handle_api_search(query_params)
@@ -154,6 +173,12 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             self.send_json({'error': 'Invalid JSON body'}, status=400)
             return
+
+        # Enforce localhost-only access for Admin POST APIs
+        if path.startswith('/api/admin'):
+            if not self.is_local_client():
+                self.send_json({'error': 'Forbidden: Admin access is restricted to localhost'}, status=403)
+                return
 
         if path == '/api/ku_synonym/add':
             self.handle_add_ku_synonym(data)
@@ -699,9 +724,15 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 clean_q = q.replace('"', '').replace("'", "")
                 words = clean_q.split()
                 for word in words:
-                    base_where.append("(display_name LIKE ? OR synonym LIKE ? OR snomed_fsn LIKE ? OR sapdt_fsn LIKE ?)")
+                    base_where.append("""
+                    (display_name LIKE ? OR synonym LIKE ? OR snomed_fsn LIKE ? OR sapdt_fsn LIKE ? OR 
+                     snomed_preferred_term LIKE ? OR snomed_all_synonyms LIKE ? OR 
+                     COALESCE(snomed_concept_id, sapdt_concept_id) IN (
+                         SELECT concept_id FROM ku_synonym_text WHERE ku_synonym_text LIKE ?
+                     ))
+                    """)
                     like_pat = f"%{word}%"
-                    base_params.extend([like_pat, like_pat, like_pat, like_pat])
+                    base_params.extend([like_pat, like_pat, like_pat, like_pat, like_pat, like_pat, like_pat])
 
             base_sql = " WHERE " + " AND ".join(base_where)
 

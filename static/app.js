@@ -5,6 +5,106 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Firebase & Cloud Firestore
+    let firestoreDb = null;
+    try {
+        if (window.firebase) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyCn5jTgv0Kn2brpnRV8Lvf7XUbHh2_PZhc",
+                authDomain: "kahis-terminology.firebaseapp.com",
+                projectId: "kahis-terminology",
+                storageBucket: "kahis-terminology.firebasestorage.app",
+                messagingSenderId: "146556934307",
+                appId: "1:146556934307:web:f5f0d06df872ff86d60716"
+            };
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            firestoreDb = firebase.firestore();
+            console.log('[Firebase] Cloud Firestore initialized successfully.');
+        }
+    } catch (e) {
+        console.warn('[Firebase] Initialization notice:', e);
+    }
+
+    // In-Browser SQLite WASM Engine (sql.js)
+    let localDbInstance = null;
+    let sqlModule = null;
+
+    async function getSqlModule() {
+        if (!sqlModule && window.initSqlJs) {
+            sqlModule = await window.initSqlJs({
+                locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${file}`
+            });
+        }
+        return sqlModule;
+    }
+
+    const localDbFileInput = document.getElementById('localDbFileInput');
+    const dbStatusPill     = document.getElementById('dbStatusPill');
+    const dbStatusLabel    = document.getElementById('dbStatusLabel');
+    const btnResetServerDb = document.getElementById('btnResetServerDb');
+
+    if (localDbFileInput) {
+        localDbFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            dbStatusLabel.textContent = `กำลังโหลด ${file.name}...`;
+            dbStatusPill.className = 'db-status-pill loading';
+
+            try {
+                const engine = await getSqlModule();
+                if (!engine) throw new Error('SQL.js library not loaded');
+
+                const arrayBuffer = await file.arrayBuffer();
+                localDbInstance = new engine.Database(new Uint8Array(arrayBuffer));
+
+                const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                dbStatusLabel.textContent = `Local: ${file.name} (${sizeMb} MB)`;
+                dbStatusPill.className = 'db-status-pill local-active';
+                dbStatusPill.style.background = '#fef3c7';
+                dbStatusPill.style.color = '#92400e';
+                dbStatusPill.style.borderColor = '#fde68a';
+
+                if (btnResetServerDb) {
+                    btnResetServerDb.style.display = 'inline-flex';
+                    btnResetServerDb.classList.remove('hidden');
+                }
+
+                currentPage = 1;
+                performSearch();
+            } catch (err) {
+                console.error('Failed to load SQLite file:', err);
+                alert('ไม่สามารถโหลดไฟล์ SQLite: ' + err.message);
+                dbStatusLabel.textContent = 'Online Server';
+                dbStatusPill.className = 'db-status-pill online';
+                dbStatusPill.style.background = '#f0fdf4';
+                dbStatusPill.style.color = '#166534';
+                dbStatusPill.style.borderColor = '#bbf7d0';
+            }
+        });
+    }
+
+    if (btnResetServerDb) {
+        btnResetServerDb.addEventListener('click', () => {
+            if (localDbInstance) {
+                try { localDbInstance.close(); } catch(e) {}
+                localDbInstance = null;
+            }
+            if (localDbFileInput) localDbFileInput.value = '';
+            dbStatusLabel.textContent = 'Online Server';
+            dbStatusPill.className = 'db-status-pill online';
+            dbStatusPill.style.background = '#f0fdf4';
+            dbStatusPill.style.color = '#166534';
+            dbStatusPill.style.borderColor = '#bbf7d0';
+            btnResetServerDb.style.display = 'none';
+            btnResetServerDb.classList.add('hidden');
+            currentPage = 1;
+            performSearch();
+        });
+    }
+
     // DOM Elements
     const searchInput = document.getElementById('searchInput');
     const clearSearchBtn = document.getElementById('clearSearchBtn');
@@ -554,6 +654,65 @@ document.addEventListener('DOMContentLoaded', () => {
     // 10. Load & Render Concept Details Inspector
     async function loadConceptDetails(conceptId) {
         if (!conceptId) return;
+        if (localDbInstance) {
+            try {
+                const qTerm = `SELECT * FROM terms WHERE snomed_concept_id = ? OR sapdt_concept_id = ? LIMIT 1`;
+                const res = localDbInstance.exec(qTerm, [conceptId, conceptId]);
+                if (res.length > 0 && res[0].values.length > 0) {
+                    const cols = res[0].columns;
+                    const obj = {};
+                    cols.forEach((col, idx) => obj[col] = res[0].values[0][idx]);
+                    obj.concept_id = conceptId;
+
+                    const qDesc = `SELECT * FROM ku_synonym_text WHERE concept_id = ?`;
+                    const descRes = localDbInstance.exec(qDesc, [conceptId]);
+                    const descriptions = [];
+                    if (obj.snomed_fsn) descriptions.push({type: 'FSN', text: obj.snomed_fsn, lang: 'en'});
+                    if (obj.snomed_preferred_term) descriptions.push({type: 'Preferred', text: obj.snomed_preferred_term, lang: 'en'});
+                    if (obj.synonym) {
+                        obj.synonym.split('|').forEach(s => {
+                            if (s.trim()) descriptions.push({type: 'Synonym', text: s.trim(), lang: 'en'});
+                        });
+                    }
+                    if (descRes.length > 0) {
+                        const dCols = descRes[0].columns;
+                        descRes[0].values.forEach(dRow => {
+                            const dObj = {};
+                            dCols.forEach((c, idx) => dObj[c] = dRow[idx]);
+                            descriptions.push({type: 'ku', text: dObj.ku_synonym_text || dObj.synonym_text || '', lang: 'ku'});
+                        });
+                    }
+                    obj.descriptions = descriptions;
+
+                    const qRel = `SELECT source_id, destination_id, type_name, destination_term, source_term FROM relationships WHERE source_id = ? OR destination_id = ?`;
+                    const relRes = localDbInstance.exec(qRel, [conceptId, conceptId]);
+                    const parents = [];
+                    const children = [];
+                    if (relRes.length > 0) {
+                        const rCols = relRes[0].columns;
+                        relRes[0].values.forEach(rRow => {
+                            const r = {};
+                            rCols.forEach((c, idx) => r[c] = rRow[idx]);
+                            if (r.source_id === conceptId && (r.type_name === 'Is a' || r.type_name === '116680003')) {
+                                parents.push({concept_id: r.destination_id, term: r.destination_term || r.destination_id});
+                            } else if (r.destination_id === conceptId && (r.type_name === 'Is a' || r.type_name === '116680003')) {
+                                children.push({concept_id: r.source_id, term: r.source_term || r.source_id});
+                            }
+                        });
+                    }
+                    obj.parents = parents;
+                    obj.children = children;
+                    currentConceptData = obj;
+                    saveConceptToHistory(conceptId, obj.display_name || obj.snomed_preferred_term || conceptId);
+                    renderConceptDetails(obj);
+                    loadFirestorePendingSynonyms(conceptId);
+                    return;
+                }
+            } catch (err) {
+                console.error('Local concept details error:', err);
+            }
+        }
+
 
         try {
             const res = await fetch(`/api/concept/${conceptId}`);
@@ -566,6 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
             saveConceptToHistory(conceptId, termStr);
 
             renderConceptDetails(data);
+            loadFirestorePendingSynonyms(conceptId);
         } catch (err) {
             console.error('Failed to load concept details:', err);
         }
@@ -844,26 +1004,32 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.removeChild(downloadLink);
     });
 
-    // Add Synonym UI Modal Handler
-    const btnAddSynonym = document.getElementById('btnAddSynonym');
-    const addSynonymModal = document.getElementById('addSynonymModal');
-    const closeSynonymModalBtn = document.getElementById('closeSynonymModalBtn');
-    const cancelSynonymBtn = document.getElementById('cancelSynonymBtn');
-    const saveSynonymBtn = document.getElementById('saveSynonymBtn');
-    const modalConceptIdSpan = document.getElementById('modalConceptIdSpan');
-    const synonymInputText = document.getElementById('synonymInputText');
-    const synonymPinInput = document.getElementById('synonymPinInput');
-    const synonymModalStatus = document.getElementById('synonymModalStatus');
+    // Suggest Thai Synonym Modal Handler (Connected to Cloud Firestore)
+    const btnAddSynonym          = document.getElementById('btnAddSynonym');
+    const addSynonymModal        = document.getElementById('addSynonymModal');
+    const closeSynonymModalBtn   = document.getElementById('closeSynonymModalBtn');
+    const cancelSynonymBtn       = document.getElementById('cancelSynonymBtn');
+    const saveSynonymBtn         = document.getElementById('saveSynonymBtn');
+    const modalConceptIdSpan     = document.getElementById('modalConceptIdSpan');
+    const modalConceptNameDiv    = document.getElementById('modalConceptNameDiv');
+    const synonymInputText       = document.getElementById('synonymInputText');
+    const synonymSubmitterInput  = document.getElementById('synonymSubmitterInput');
+    const synonymNoteInput       = document.getElementById('synonymNoteInput');
+    const synonymModalStatus     = document.getElementById('synonymModalStatus');
 
     if (btnAddSynonym) {
         btnAddSynonym.addEventListener('click', () => {
             if (!selectedConceptId) {
-                alert('กรุณาเลือก Concept ก่อนทำการเพิ่มคำพ้อง');
+                alert('กรุณาเลือก Concept ในตารางก่อนทำการเสนอคำพ้อง');
                 return;
             }
             modalConceptIdSpan.textContent = selectedConceptId;
+            if (modalConceptNameDiv) {
+                modalConceptNameDiv.textContent = currentConceptData?.display_name || currentConceptData?.snomed_preferred_term || '';
+            }
             synonymInputText.value = '';
-            if (synonymPinInput) synonymPinInput.value = '';
+            if (synonymSubmitterInput) synonymSubmitterInput.value = '';
+            if (synonymNoteInput) synonymNoteInput.value = '';
             synonymModalStatus.textContent = '';
             addSynonymModal.classList.remove('hidden');
             synonymInputText.focus();
@@ -880,37 +1046,53 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveSynonymBtn) {
         saveSynonymBtn.addEventListener('click', async () => {
             const val = (synonymInputText.value || '').trim();
-            const pin = (synonymPinInput ? synonymPinInput.value : '').trim();
+            const submitter = (synonymSubmitterInput?.value || '').trim() || 'สัตวแพทย์ (KAHIS User)';
+            const note = (synonymNoteInput?.value || '').trim();
 
             if (!val) {
-                synonymModalStatus.textContent = 'กรุณากรอกคำพ้องอย่างน้อย 1 คำ';
-                return;
-            }
-            if (pin !== '53027918') {
-                synonymModalStatus.textContent = 'รหัส PIN ไม่ถูกต้อง';
+                synonymModalStatus.textContent = 'กรุณากรอกคำพ้องภาษาไทยอย่างน้อย 1 คำ';
                 return;
             }
 
             saveSynonymBtn.disabled = true;
-            saveSynonymBtn.textContent = '⏳ กำลังบันทึก...';
+            saveSynonymBtn.textContent = '⏳ กำลังส่งข้อมูล...';
+            synonymModalStatus.textContent = '';
+
             try {
-                const resp = await fetch('/api/ku_synonym/add', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({concept_id: selectedConceptId, text: val, lang: 'ku'})
-                });
-                const res = await resp.json();
-                if (res.ok) {
-                    closeSynModal();
-                    loadConceptDetails(selectedConceptId);
+                // Save to Firebase Firestore collection 'ku_synonyms'
+                if (firestoreDb) {
+                    await firestoreDb.collection('ku_synonyms').add({
+                        concept_id: String(selectedConceptId),
+                        synonym_text: val,
+                        lang_tag: 'ku',
+                        status: 'pending',
+                        submitted_by: submitter,
+                        clinical_note: note,
+                        created_at: new Date().toISOString()
+                    });
                 } else {
-                    synonymModalStatus.textContent = res.error || 'เกิดข้อผิดพลาดในการบันทึก';
+                    // Fallback to local server API if running on localhost
+                    await fetch('/api/ku_synonym/add', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({concept_id: selectedConceptId, text: val, lang: 'ku'})
+                    });
                 }
+
+                // Add to UI immediately as pending
+                const li = document.createElement('li');
+                li.className = 'desc-item';
+                li.innerHTML = `<span class="desc-type-badge desc-badge-syn" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a;">Pending</span> <span class="desc-lang desc-lang-ku">ku</span> <span class="desc-text" style="font-weight:600; color:#10b981;">${escapeHtml(val)}</span> <small style="color:#64748b; font-size:11px; margin-left:4px;">(รออนุมัติ)</small>`;
+                synonymListUl.appendChild(li);
+
+                closeSynModal();
+                alert(`✅ ส่งข้อเสนอคำพ้อง "${val}" เรียบร้อยแล้ว!\nข้อมูลถูกบันทึกขึ้น Cloud Firestore (สถานะ Pending) เพื่อรอการตรวจสอบและบรรจุเข้าฐานข้อมูลรอบถัดไป`);
             } catch (err) {
-                synonymModalStatus.textContent = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+                console.error('Save synonym error:', err);
+                synonymModalStatus.textContent = 'เกิดข้อผิดพลาดในการบันทึก: ' + err.message;
             } finally {
                 saveSynonymBtn.disabled = false;
-                saveSynonymBtn.textContent = '💾 บันทึกคำพ้อง';
+                saveSynonymBtn.textContent = '🚀 ส่งข้อเสนอคำพ้อง';
             }
         });
     }
@@ -950,5 +1132,31 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#039;');
     }
 
+    function loadFirestorePendingSynonyms(conceptId) {
+        if (!firestoreDb || !conceptId) return;
+        firestoreDb.collection('ku_synonyms')
+            .where('concept_id', '==', String(conceptId))
+            .get()
+            .then(snapshot => {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (!data.synonym_text) return;
+                    const existing = Array.from(synonymListUl.querySelectorAll('.desc-text'))
+                        .some(el => el.textContent.trim().toLowerCase() === data.synonym_text.trim().toLowerCase());
+                    if (!existing) {
+                        const li = document.createElement('li');
+                        li.className = 'desc-item';
+                        const isPending = data.status === 'pending';
+                        const badgeText = isPending ? 'Pending' : 'Synonym';
+                        const badgeStyle = isPending ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : '';
+                        li.innerHTML = `<span class="desc-type-badge desc-badge-syn" style="${badgeStyle}">${escapeHtml(badgeText)}</span> <span class="desc-lang desc-lang-ku">ku</span> <span class="desc-text" style="font-weight:600; color:#10b981;">${escapeHtml(data.synonym_text)}</span> <small style="color:#64748b; font-size:11px; margin-left:4px;">(${isPending ? 'รออนุมัติ' : 'อนุมัติแล้ว'})</small>`;
+                        synonymListUl.appendChild(li);
+                    }
+                });
+            })
+            .catch(err => console.log('Firestore fetch notice:', err));
+    }
     window.loadConceptDetails = loadConceptDetails;
 });
+
+
