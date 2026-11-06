@@ -67,11 +67,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 const engine = await getSqlModule();
                 if (!engine) throw new Error('SQL.js library not loaded');
 
-                const arrayBuffer = await file.arrayBuffer();
+                let arrayBuffer;
+                const isGz = file.name.endsWith('.gz') || file.name.endsWith('.db.gz');
+
+                if (isGz) {
+                    dbStatusLabel.textContent = `กำลังคลายการบีบอัด ${file.name}...`;
+                    if ('DecompressionStream' in window) {
+                        const ds = new DecompressionStream('gzip');
+                        const decompressedStream = file.stream().pipeThrough(ds);
+                        const decompressedResponse = new Response(decompressedStream);
+                        arrayBuffer = await decompressedResponse.arrayBuffer();
+                    } else {
+                        throw new Error('เบราว์เซอร์ไม่รองรับ DecompressionStream กรุณาใช้ไฟล์ .db แทน');
+                    }
+                } else {
+                    arrayBuffer = await file.arrayBuffer();
+                }
+
+                dbStatusLabel.textContent = `กำลังเปิดฐานข้อมูล...`;
                 localDbInstance = new engine.Database(new Uint8Array(arrayBuffer));
 
-                const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-                dbStatusLabel.textContent = `Local: ${file.name} (${sizeMb} MB)`;
+                const sizeMb = (arrayBuffer.byteLength / (1024 * 1024)).toFixed(1);
+                const originalSizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                const displayLabel = isGz
+                    ? `Local: ${file.name} (${originalSizeMb} MB → ${sizeMb} MB)`
+                    : `Local: ${file.name} (${sizeMb} MB)`;
+
+                dbStatusLabel.textContent = displayLabel;
                 dbStatusPill.className = 'db-status-pill local-active';
                 dbStatusPill.style.background = '#fef3c7';
                 dbStatusPill.style.color = '#92400e';

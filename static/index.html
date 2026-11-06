@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css?v=7.3">
+    <link rel="stylesheet" href="style.css?v=7.4">
 
     <!-- Firebase SDK (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -38,10 +38,10 @@
                     <span style="width:7px; height:7px; border-radius:50%; background:#22c55e;"></span>
                     <span id="dbStatusLabel">Online Server</span>
                 </span>
-                <label class="btn-upload-db" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:4px 10px; border-radius:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; cursor:pointer; font-weight:600; transition:all 0.15s;" title="เลือกไฟล์ terminology_search.db จากเครื่องเพื่อค้นหาและทดสอบในเบราว์เซอร์โดยตรง">
+                <label class="btn-upload-db" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:4px 10px; border-radius:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; cursor:pointer; font-weight:600; transition:all 0.15s;" title="เลือกไฟล์ terminology_search.db หรือไฟล์บีบอัด .db.gz จากเครื่องเพื่อค้นหาในเบราว์เซอร์โดยตรง">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span>📂 โหลดไฟล์ DB จากเครื่อง</span>
-                    <input type="file" id="localDbFileInput" accept=".db,.sqlite,.sqlite3" style="display:none;">
+                    <span>📂 โหลดไฟล์ DB จากเครื่อง (.db / .gz)</span>
+                    <input type="file" id="localDbFileInput" accept=".db,.sqlite,.sqlite3,.db.gz,.gz" style="display:none;">
                 </label>
                 <button id="btnResetServerDb" class="hidden" style="display:none; font-size:11px; padding:4px 8px; border-radius:6px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; cursor:pointer;" title="สลับกลับไปใช้ฐานข้อมูลจากเซิร์ฟเวอร์หลัก">🔄 กลับใช้เซิร์ฟเวอร์</button>
             </div>
@@ -445,145 +445,78 @@
                 <button class="modal-close-btn" id="closeUserGuideBtn" style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer; padding:0; line-height:1; transition:color 0.15s;" onmouseover="this.style.color='#0f172a'" onmouseout="this.style.color='#64748b'">&times;</button>
             </div>
             
-            <!-- Modal Body (LIGHT THEME FULL UNTRUNCATED MANUAL) -->
+                        <!-- Modal Body (LIGHT THEME FULL UNTRUNCATED MANUAL v7.0) -->
             <div class="modal-body" style="padding:24px 28px; overflow-y:auto; font-size:14px; line-height:1.65; color:#334155; background:#ffffff;">
-                <p style="margin-top:0; font-size:14px; color:#334155;">Welcome to <strong>KAHIS Terminology System</strong> — ระบบฐานข้อมูลและสืบค้นรหัสมาตรฐานสัตวแพทย์สำหรับระบบเวชระเบียนอิเล็กทรอนิกส์โรงพยาบาลสัตว์ ม.เกษตร (ประเทศไทย)</p>
+                <p style="margin-top:0; font-size:14px; color:#334155;">ยินดีต้อนรับสู่ <strong>KAHIS Terminology System</strong> — ระบบฐานข้อมูลและสืบค้นรหัสมาตรฐานสัตวแพทย์สำหรับระบบเวชระเบียนอิเล็กทรอนิกส์ (EHR/EMR) โรงพยาบาลสัตว์ มหาวิทยาลัยเกษตรศาสตร์ (ประเทศไทย)</p>
                 <hr style="border:0; border-top:1px solid #e2e8f0; margin:20px 0;">
 
-                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">📌 1. บทนำและวัตถุประสงค์ (Introduction & Purpose)</h2>
-                <p style="color:#334155;">ระบบ <strong>KAHIS Terminology</strong> พัฒนาขึ้นเพื่อเป็นศูนย์กลางการสืบค้น และจับคู่รหัสมาตรฐานคำศัพท์สัตวแพทย์ โดยเชื่อมโยงรหัสมาตรฐาน 3 แหล่งอ้างอิงเข้าด้วยกัน ได้แก่:</p>
+                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">📌 1. บทนำและแหล่งข้อมูลมาตรฐาน 4 แหล่ง (Introduction & 4 Data Sources)</h2>
+                <p style="color:#334155;">ระบบ <strong>KAHIS Terminology</strong> เชื่อมโยงรหัสมาตรฐานสัตวแพทย์และคำศัพท์สากลจาก 4 แหล่งอ้างอิงล่าสุด:</p>
                 <ol style="padding-left:22px; margin-bottom:16px; color:#334155;">
-                    <li style="margin-bottom:6px;"><strong>SA-PDT (Small Animal Problems and Diagnoses Terms)</strong>: มาตรฐานคำศัพท์สัตวแพทย์อ้างอิงจาก <a href="https://vtsl.vetmed.vt.edu/sa/" target="_blank" style="color:#2563eb; text-decoration:underline; font-weight:500;">Virginia-Maryland College of Veterinary Medicine (VTSL)</a></li>
-                    <li style="margin-bottom:6px;"><strong>VSCT (Veterinary Extension to SNOMED CT)</strong>: มาตรฐานคำศัพท์สัตวแพทย์สากล อ้างอิงจากแหล่งเดียวกันคือ Virginia-Maryland College of Veterinary Medicine</li>
-                    <li style="margin-bottom:6px;"><strong>SCT International (SNOMED CT International Core)</strong>: มาตรฐานคำศัพท์การแพทย์สากลระดับโลก</li>
+                    <li style="margin-bottom:6px;"><strong>SA-PDT 20260930 (Small Animal Problems and Diagnoses Terms)</strong>: มาตรฐานคำศัพท์สัตวแพทย์อ้างอิงจาก <a href="https://vtsl.vetmed.vt.edu/sa/" target="_blank" style="color:#2563eb; text-decoration:underline; font-weight:500;">Virginia-Maryland College of Veterinary Medicine (VTSL)</a></li>
+                    <li style="margin-bottom:6px;"><strong>VSCT 20260930 (Veterinary Extension to SNOMED CT)</strong>: ส่วนขยายคำศัพท์สัตวแพทย์สากล</li>
+                    <li style="margin-bottom:6px;"><strong>SCT International 20261101 (SNOMED CT International Core)</strong>: มาตรฐานคำศัพท์การแพทย์สากลระดับโลก (574,677+ Terms)</li>
+                    <li style="margin-bottom:6px;"><strong>KU Custom Synonyms 20261106</strong>: คลังคำพ้องและคำแปลภาษาไทยที่รับรองโดยคณะสัตวแพทยศาสตร์ ม.เกษตรศาสตร์</li>
                 </ol>
-                <p style="margin-bottom:8px; color:#1e293b;"><strong>วัตถุประสงค์หลัก</strong>:</p>
-                <ul style="padding-left:22px; margin-bottom:20px; color:#334155;">
-                    <li style="margin-bottom:4px;">เพื่อให้การบันทึกประวัติการรักษา (EHR/EMR) ในโรงพยาบาลสัตว์ ม.เกษตร มีมาตรฐานเดียวกัน</li>
-                    <li style="margin-bottom:4px;">เพื่อพัฒนาการสร้างฐานข้อมูลการสืบค้นเฉพาะแห่งสำหรับโรงพยาบาลสัตว์ ม.เกษตร (ประเทศไทย)</li>
-                    <li style="margin-bottom:4px;">เพื่อรองรับการสืบค้นด้วยภาษาไทย ภาษาอังกฤษ คำย่อทางการแพทย์ หรือรหัส Concept ID</li>
-                    <li style="margin-bottom:4px;">เพื่อเชื่อมโยงข้อมูลสุขภาพสัตว์ไทยเข้าสู่มาตรฐานสากลระดับโลก</li>
+
+                <hr style="border:0; border-top:1px solid #e2e8f0; margin:20px 0;">
+
+                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">💡 2. หลักการทำงานและสัญลักษณ์มาตรฐาน (Principles & Symbols)</h2>
+                
+                <h3 style="font-size:15px; color:#0284c7; margin-top:14px; margin-bottom:8px; font-weight:700;">2.1 สัญลักษณ์ประเภทมโนทัศน์ (Concept Status)</h3>
+                <ul style="padding-left:22px; margin-bottom:14px; color:#334155;">
+                    <li style="margin-bottom:6px;"><strong><code>≡</code> Fully Defined Concept (มโนทัศน์ที่นิยามครบถ้วน):</strong> มีคุณลักษณะทางคลินิกครบถ้วนสมบูรณ์ตามตรรกะคอมพิวเตอร์</li>
+                    <li style="margin-bottom:6px;"><strong><code>○</code> Primitive Concept (มโนทัศน์พื้นฐาน):</strong> มโนทัศน์พื้นฐานที่ยังไม่มีคุณลักษณะครบทุกมิติ (แสดงเป็นวงแหวนกลมคมชัด เช่น <em>Diarrhea - 62315008</em>)</li>
                 </ul>
 
-                <hr style="border:0; border-top:1px solid #e2e8f0; margin:20px 0;">
-
-                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">💡 2. หลักการทำงานของระบบ (Core System Principles)</h2>
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:8px; font-weight:700;">2.1 โครงสร้างแบบมโนทัศน์ (Concept-Based Architecture)</h3>
-                <p style="color:#334155;">ระบบจัดเก็บข้อมูลแบบ "มโนทัศน์" (Concept) ซึ่งความหมาย 1 มโนทัศน์ (Concept ID) สามารถมีคำเรียกได้หลายรูปแบบ (Synonyms & Aliases) ทั้งภาษาไทย ภาษาอังกฤษ และคำย่อ โดยเมื่อสืบค้นด้วยคำใดๆ ระบบจะดึงมโนทัศน์ที่ถูกต้องขึ้นมาแสดงผลเสมอ</p>
-
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:8px; font-weight:700;">2.2 ระบบสีป้ายกำกับมาตรฐาน (Unified Badge Design System Tokens)</h3>
-                <p style="color:#334155;">เพื่อให้อ่านข้อมูลได้ง่าย ชัดเจน และสบายตา ระบบได้กำหนดโค้ดสีกลางสำหรับแหล่งข้อมูลดังนี้:</p>
-                <table style="width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; background:#ffffff;">
+                <h3 style="font-size:15px; color:#0284c7; margin-top:14px; margin-bottom:8px; font-weight:700;">2.2 ระบบสีป้ายกำกับมาตรฐาน (Unified Badges)</h3>
+                <table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; background:#ffffff;">
                     <thead>
                         <tr style="background:#f1f5f9; color:#0f172a;">
                             <th style="padding:9px 12px; text-align:center; border:1px solid #cbd5e1; width:110px;">ป้ายกำกับ</th>
-                            <th style="padding:9px 12px; text-align:left; border:1px solid #cbd5e1; width:130px;">ตัวอย่างป้ายสี</th>
                             <th style="padding:9px 12px; text-align:left; border:1px solid #cbd5e1;">ความหมาย / คำอธิบาย</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">SA-PDT</code></td><td style="padding:8px 12px; border:1px solid #e2e8f0;"><span class="rel-badge badge-sapdt">SA-PDT</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ข้อมูลมาจากฐานข้อมูล SA-PDT</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">VSCT</code></td><td style="padding:8px 12px; border:1px solid #e2e8f0;"><span class="rel-badge badge-vsct">VSCT</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ข้อมูลมาจากฐานข้อมูล VSCT</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">VSCT ONLY</code></td><td style="padding:8px 12px; border:1px solid #e2e8f0;"><span class="rel-badge badge-vsct-only">VSCT ONLY</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มโนทัศน์ที่มีเฉพาะในฐานข้อมูล VSCT (ไม่มีใน SA-PDT)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">SCT-INTER</code></td><td style="padding:8px 12px; border:1px solid #e2e8f0;"><span class="rel-badge badge-sct">SCT-INTER</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มโนทัศน์ขยายมาจาก SNOMED CT สากล</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">ku</code></td><td style="padding:8px 12px; border:1px solid #e2e8f0;"><span class="rel-badge badge-ku">ku</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">คำพ้องภาษาไทย/ภาษาอังกฤษที่เพิ่มโดยโครงการ KU</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">SYSTEM</code></td><td style="padding:8px 12px; border:1px solid #e2e8f0;"><span class="rel-badge badge-sys">SYSTEM</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ข้อมูลระบบและเมทาเดทา</td></tr>
+                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><span class="badge-micro badge-sapdt">SA-PDT</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ข้อมูลมีอยู่ในฐานข้อมูล SA-PDT (VTSL)</td></tr>
+                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><span class="badge-micro badge-vsct">VSCT</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ข้อมูลมีอยู่ในฐานข้อมูล VSCT (Veterinary Extension)</td></tr>
+                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><span class="badge-micro badge-sct-only">SCT-Inter Only</span></td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มโนทัศน์ที่มีเฉพาะใน SNOMED CT สากล (นอกเหนือจากชุดสัตวแพทย์หลัก)</td></tr>
                     </tbody>
                 </table>
 
                 <hr style="border:0; border-top:1px solid #e2e8f0; margin:20px 0;">
 
-                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">🔍 3. วิธีการใช้งานระบบสืบค้น (Step-by-Step User Guide)</h2>
-                <h3 style="font-size:15px; color:#0284c7; margin-top:14px; margin-bottom:6px; font-weight:700;">ขั้นตอนที่ 1: การป้อนคำค้นหา (Search Execution)</h3>
-                <p style="color:#334155;">ในช่องค้นหาด้านซ้ายมือ คุณสามารถพิมพ์ค้นหาได้หลายรูปแบบ:</p>
-                <ul style="padding-left:22px; margin-bottom:10px; color:#334155;">
-                    <li style="margin-bottom:4px;"><strong>ค้นหาด้วยภาษาไทย</strong>: เช่น <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">ท้องเสีย</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">ไอ</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">มีน้ำมูก</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">หัวใจโต</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">นิ่วในไต</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">ขาเจ็บ</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">อ้วก</code></li>
-                    <li style="margin-bottom:4px;"><strong>ค้นหาด้วยภาษาอังกฤษ</strong>: เช่น <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Diarrhea</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Cough</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Cardiomegaly</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Renal calculi</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Pyometra</code></li>
-                    <li style="margin-bottom:4px;"><strong>ค้นหาด้วยคำย่อทางการแพทย์</strong>: เช่น <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">FLUTD</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">IVDD</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">CCLR</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">TCC</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">SCC</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">CRF</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">CKD</code></li>
-                    <li style="margin-bottom:4px;"><strong>ค้นหาด้วยรหัส Concept ID</strong>: เช่น <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">95570007</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">70650003</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">352621000009109</code></li>
-                </ul>
-                <p style="font-size:13px; color:#64748b; font-style:italic;">*(ระบบรองรับการค้นหาแบบค้นคำขึ้นต้นหลายคำ Prefix Search เช่น พิมพ์ <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">shou frac</code> เพื่อหา Shoulder fracture ได้)*</p>
-
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:6px; font-weight:700;">ขั้นตอนที่ 2: การใช้งานตัวกรอง (Filtering Options)</h3>
-                <p style="color:#334155;">เมนูด้านซ้ายช่วยให้คุณบีบผลการค้นหาให้แคบลงได้:</p>
+                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">🔍 3. วิธีการใช้งานระบบสืบค้น (User Guide)</h2>
+                
+                <h3 style="font-size:15px; color:#0284c7; margin-top:14px; margin-bottom:6px; font-weight:700;">3.1 การโหลดฐานข้อมูล (.db และ .db.gz)</h3>
+                <p style="color:#334155;">ปุ่ม <strong>`📂 โหลดไฟล์ DB จากเครื่อง (.db / .gz)`</strong> ที่มุมขวาบน รองรับไฟล์ทั้ง 2 แบบ:</p>
                 <ul style="padding-left:22px; margin-bottom:12px; color:#334155;">
-                    <li style="margin-bottom:4px;"><strong>Status (สถานะ)</strong>: เลือกเฉพาะมโนทัศน์ที่ยังใช้งานอยู่ (<code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Active</code>) หรือรวมมโนทัศน์ที่ยกเลิกแล้ว (<code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Inactive</code>)</li>
-                    <li style="margin-bottom:4px;"><strong>Semantic Tags (หมวดหมู่)</strong>: กรองตามประเภททางคลินิก เช่น <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">disorder</code> (โรค/ความผิดปกติ), <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">finding</code> (อาการ/ผลตรวจ), <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">procedure</code> (หัตถการ/การรักษา), <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">organism</code> (เชื้อโรค/สิ่งมีชีวิต)</li>
+                    <li style="margin-bottom:4px;"><strong>ไฟล์บีบอัด <code>.db.gz</code> (~53.6 MB):</strong> ขนาดเล็ก โหลดเร็ว ประหยัดพื้นที่จัดเก็บ เบราว์เซอร์จะคลายการบีบอัดอัตโนมัติใน RAM ในเวลาเพียง 1 วินาที</li>
+                    <li style="margin-bottom:4px;"><strong>ไฟล์ก้อนเต็ม <code>.db</code> (~206.6 MB):</strong> ไฟล์ SQLite แบบไม่บีบอัดเดิม</li>
                 </ul>
 
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:6px; font-weight:700;">ขั้นตอนที่ 3: การดูผลการค้นหาและการจัดเรียง (Results List)</h3>
+                <h3 style="font-size:15px; color:#0284c7; margin-top:14px; margin-bottom:6px; font-weight:700;">3.2 การป้อนคำค้นหาและเงื่อนไข (Search Options)</h3>
                 <ul style="padding-left:22px; margin-bottom:12px; color:#334155;">
-                    <li style="margin-bottom:4px;">ตารางฝั่งซ้ายจะแสดงชื่อภาษาอังกฤษหลัก พร้อมรหัส และป้ายกำกับแหล่งข้อมูล (<code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">SA-PDT</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">VSCT</code>, <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">SCT-Inter Only</code>) ในบรรทัดใหม่อย่างเป็นระเบียบ</li>
-                    <li style="margin-bottom:4px;">คลิกที่แถบรายการเพื่อดูรายละเอียดมโนทัศน์ฉบับเต็มในตารางฝั่งขวา</li>
+                    <li style="margin-bottom:4px;"><strong>ค้นหาได้ทั้ง 4 รูปแบบ:</strong> ภาษาไทย (<code>ท้องเสีย</code>), ภาษาอังกฤษ (<code>Diarrhea</code>), คำย่อ (<code>FLUTD</code>), หรือรหัส Concept ID (<code>62315008</code>)</li>
+                    <li style="margin-bottom:4px;"><strong>Search mode:</strong> <code>Prefix any order</code> (คำขึ้นต้น), <code>Exact match</code> (ตรงตัวเป๊ะ), <code>Partial match</code> (ส่วนหนึ่งของคำ)</li>
+                    <li style="margin-bottom:4px;"><strong>Description type:</strong> <code>All</code>, <code>FSN only</code> (ชื่อทางการ), <code>Synonyms only</code> (คำพ้อง)</li>
+                    <li style="margin-bottom:4px;"><strong>Language Refsets:</strong> <code>All languages</code>, <code>English</code>, <code>Thai (KU Synonyms)</code></li>
+                    <li style="margin-bottom:4px;"><strong>Group by concept:</strong> รวม 1 มโนทัศน์ต่อแถว หรือแตกทุกแถวตาม Synonyms</li>
+                    <li style="margin-bottom:4px;"><strong>🌐 ค้นหาขยายสากล:</strong> ขยายการค้นหาทะลุผ่าน SNOMED CT International เต็ม 574,677+ คำ</li>
                 </ul>
-
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:6px; font-weight:700;">ขั้นตอนที่ 4: การใช้งานตารางรายละเอียดมโนทัศน์ (Concept Details Panel)</h3>
-                <p style="color:#334155;">การ์ดฝั่งขวาจะแสดงข้อมูลเชิงลึกของมโนทัศน์ที่เลือก:</p>
-                <ul style="padding-left:22px; margin-bottom:12px; color:#334155;">
-                    <li style="margin-bottom:4px;"><strong>Header Box</strong>: แสดงรหัส Concept ID, ชื่อ FSN หลัก, สถานะ, และป้ายกำกับแหล่งข้อมูล</li>
-                    <li style="margin-bottom:4px;"><strong>Synonyms & Aliases</strong>: แสดงคำพ้องทั้งหมด ทั้งภาษาไทย (ป้าย <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">[ku]</code>), ภาษาอังกฤษ (ป้าย <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">[en]</code>) และ FSN</li>
-                    <li style="margin-bottom:4px;"><strong>Attributes & Hierarchy</strong>: แสดงระบบอวัยวะ (<code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Body System</code>), มโนทัศน์แม่ (<code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Parents</code>) และมโนทัศน์ลูก (<code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Children</code>) ในโครงสร้างต้นไม้</li>
-                </ul>
-
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:6px; font-weight:700;">ขั้นตอนที่ 5: การเพิ่มคำพ้องประจำโครงการ (Add KU Custom Synonym)</h3>
-                <p style="color:#334155;">หากสัตวแพทย์ต้องการเสนอเพิ่มคำพ้องภาษาไทยใหม่ในระบบ:</p>
-                <ol style="padding-left:22px; margin-bottom:20px; color:#334155;">
-                    <li style="margin-bottom:4px;">คลิกปุ่ม <strong><code>[+ เพิ่มคำพ้อง / Add Synonym]</code></strong> ในการ์ดรายละเอียดมโนทัศน์</li>
-                    <li style="margin-bottom:4px;">พิมพ์คำพ้องภาษาไทยหรือคำย่อที่ต้องการ</li>
-                    <li style="margin-bottom:4px;">กรอกรหัส PIN สิทธิ์การบันทึก แล้วกด <strong><code>[💾 บันทึกคำพ้อง]</code></strong> ข้อมูลจะถูกบันทึกลงระบบทันที</li>
-                </ol>
 
                 <hr style="border:0; border-top:1px solid #e2e8f0; margin:20px 0;">
 
-                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">📚 4. อภิธานศัพท์และคำย่อทางการแพทย์สัตวแพทย์ (Glossary & Abbreviations)</h2>
+                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">⭐ 4. ระบบ Favorites (บันทึกคำศัพท์ที่ใช้บ่อย)</h2>
+                <ul style="padding-left:22px; margin-bottom:14px; color:#334155;">
+                    <li style="margin-bottom:6px;"><strong>ปุ่มรูปดาว <code>☆</code> / <code>★</code>:</strong> อยู่มุมขวาบนของกล่องสีฟ้า คลิกเพื่อบันทึกมโนทัศน์ที่ใช้บ่อย (ดาวจะเปลี่ยนเป็นสีทอง <code>★</code> พร้อมแจ้งเตือน Toast)</li>
+                    <li style="margin-bottom:6px;"><strong>แท็บ <code>⭐ Favorites</code> ฝั่งซ้าย:</strong> สลับดูรายการที่บันทึกไว้ คลิกเปิดดูรายละเอียดได้ทันที และมีปุ่ม <code>✕</code> สำหรับลบรายการ</li>
+                </ul>
 
-                <h3 style="font-size:15px; color:#0284c7; margin-top:16px; margin-bottom:8px; font-weight:700;">4.1 คำย่อเกี่ยวกับระบบและมาตรฐาน (System & Standard Terms)</h3>
-                <table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; background:#ffffff;">
-                    <thead>
-                        <tr style="background:#f1f5f9; color:#0f172a;">
-                            <th style="padding:9px 12px; text-align:center; border:1px solid #cbd5e1; width:120px;">คำย่อ</th>
-                            <th style="padding:9px 12px; text-align:left; border:1px solid #cbd5e1;">คำเต็มภาษาอังกฤษ</th>
-                            <th style="padding:9px 12px; text-align:left; border:1px solid #cbd5e1;">ความหมาย / คำอธิบาย</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>KAHIS</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Kasetsart Animal Hospital Information System</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ระบบสารสนเทศโรงพยาบาลสัตว์ มหาวิทยาลัยเกษตรศาสตร์</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>SA-PDT</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Small Animal Problems and Diagnoses Terms</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">รหัสมาตรฐานคำศัพท์สัตวแพทย์จาก Virginia-Maryland College of Veterinary Medicine</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>VSCT</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Veterinary Extension to SNOMED CT</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ส่วนขยายคำศัพท์สัตวแพทย์สากลของ SNOMED CT จาก Virginia-Maryland College of Veterinary Medicine</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>SNOMED CT</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Systematized Nomenclature of Medicine -- Clinical Terms</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มาตรฐานคำศัพท์ทางการแพทย์และการสัตวแพทย์สากลระดับโลก</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>FSN</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Fully Specified Name</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ชื่อมโนทัศน์ฉบับเต็มที่ระบุหมวดหมู่ในวงเล็บ เช่น <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px;">Cough (finding)</code></td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>PT</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Preferred Term</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ชื่อเรียกหลักที่เป็นที่นิยมใช้มากที่สุดในมโนทัศน์นั้นๆ</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>ku</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Kasetsart University Custom Synonym</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">คำพ้องประจำโครงการที่เสนอแนะและบันทึกโดยทีมสัตวแพทย์ มก.</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>EHR / EMR</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Electronic Health / Medical Record</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ระบบบันทึกประวัติการรักษาและเวชระเบียนอิเล็กทรอนิกส์</td></tr>
-                    </tbody>
-                </table>
+                <hr style="border:0; border-top:1px solid #e2e8f0; margin:20px 0;">
 
-                <h3 style="font-size:15px; color:#0284c7; margin-top:20px; margin-bottom:8px; font-weight:700;">4.2 คำย่อโรคและอาการคลินิกสัตวแพทย์ที่ใช้บ่อย (Common Veterinary Clinical Abbreviations)</h3>
-                <table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; background:#ffffff;">
-                    <thead>
-                        <tr style="background:#f1f5f9; color:#0f172a;">
-                            <th style="padding:9px 12px; text-align:center; border:1px solid #cbd5e1; width:120px;">คำย่อ</th>
-                            <th style="padding:9px 12px; text-align:left; border:1px solid #cbd5e1;">ชื่อเต็มภาษาอังกฤษ</th>
-                            <th style="padding:9px 12px; text-align:left; border:1px solid #cbd5e1;">คำอธิบาย / ชื่อภาษาไทย</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>FLUTD</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Feline Lower Urinary Tract Disease</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">กลุ่มโรคทางเดินปัสสาวะส่วนล่างในแมว (ปัสสาวะขัด/เบ่ง/เป็นเลือด)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>IVDD</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Intervertebral Disc Disease</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">โรคหมอนรองกระดูกทับเส้นประสาท (ทำให้เกิดอาการปวด/อัมพาต)</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>CCLR</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Cranial Cruciate Ligament Rupture</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ภาวะเอ็นไขว้หน้าข้อเข่าขาด (สาเหตุหลักของอาการขาเจ็บในสุนัข)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>CKD</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Chronic Kidney Disease</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">โรคไตเรื้อรัง (ภาวะการทำงานของไตเสื่อมลงแบบถาวร)</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>CRF</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Chronic Renal Failure</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ภาวะไตวายเรื้อรัง</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>AKI</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Acute Kidney Injury</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ภาวะไตวายเฉียบพลัน</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>GDV</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Gastric Dilatation-Volvulus</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">ภาวะกระเพาะอาหารขยายและบิดหมุน (ฉุกเฉินในสุนัขพันธุ์ใหญ่)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>UTI</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Urinary Tract Infection</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">การติดเชื้อในระบบทางเดินปัสสาวะ</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>TCC</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Transitional Cell Carcinoma</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มะเร็งเยื่อบุผิวชนิดทรานซิชันนัล (พบมากในกระเพาะปัสสาวะ/ท่อไต)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>SCC</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Squamous Cell Carcinoma</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มะเร็งเซลล์ผิวหนังชนิดสแควโมส</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>MCT</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Mast Cell Tumor</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มะเร็งแมสต์เซลล์ (เนื้องอกผิวหนังที่พบได้บ่อยในสุนัข)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>OSA</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Osteosarcoma</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มะเร็งกระดูก</td></tr>
-                        <tr style="background:#ffffff;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>HSA</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Hemangiosarcoma</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">มะเร็งหลอดเลือด (พบมากที่ม้ามและหัวใจ)</td></tr>
-                        <tr style="background:#f8fafc;"><td style="padding:8px 12px; text-align:center; border:1px solid #e2e8f0;"><strong>KCS</strong></td><td style="padding:8px 12px; border:1px solid #e2e8f0;">Keratoconjunctivitis Sicca</td><td style="padding:8px 12px; border:1px solid #e2e8f0; color:#334155;">โรคตาแห้งในสัตว์เลี้ยง (ภาวะน้ำตาแห้ง)</td></tr>
-                    </tbody>
-                </table>
+                <h2 style="font-size:18px; color:#1e40af; margin-top:0; margin-bottom:12px; font-weight:700; border-bottom:2px solid #dbeafe; padding-bottom:6px;">💡 5. การเสนอคำพ้องภาษาไทย (Suggest Thai Synonym)</h2>
+                <p style="color:#334155;">คลิกปุ่ม <strong>`[💡 เสนอคำพ้องภาษาไทย]`</strong> ในกล่องสีฟ้าเพื่อเสนอคำพ้องใหม่ ข้อมูลจะถูกส่งขึ้น <strong>Cloud Firestore</strong> อัตโนมัติ เพื่อให้ผู้ดูแลระบบตรวจสอบและอนุมัติเข้าฐานข้อมูลรอบถัดไป</p>
             </div>
             
             <!-- Modal Footer -->
@@ -595,7 +528,7 @@
     </div>
 
     <!-- Script -->
-    <script src="app.js?v=7.3"></script>
+    <script src="app.js?v=7.4"></script>
     <!-- Toast Notification Popup -->
     <div id="toastPopup" class="toast-popup hidden"></div>
 </body>

@@ -60,3 +60,6 @@ pip-log.txt
 Thumbs.db
 .env
 .env.local
+
+# ----- Firebase Cache -----
+.firebase/
