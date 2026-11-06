@@ -344,6 +344,7 @@ h1, h2, h3, h4, p, span, div, td, th, li, a, label, input, select {
     flex-direction: column;
     gap: 8px;
     overflow-y: auto;
+    overflow-x: hidden !important;
 }
 
 .section-heading {
@@ -608,15 +609,28 @@ h1, h2, h3, h4, p, span, div, td, th, li, a, label, input, select {
 }
 
 /* ○ = Primitive Concept (900000000000074008) */
-.icon-circle {
+.icon-primitive {
     display: inline-block;
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    border: 2px solid #adb5bd;
+    border: 1.5px solid #94a3b8;
     background: transparent;
     margin-right: 6px;
     vertical-align: middle;
+    box-sizing: border-box;
+}
+
+.card-type-icon-primitive {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    background: transparent;
+    vertical-align: middle;
+    margin-right: 4px;
+    box-sizing: border-box;
 }
 
 /* Legacy: kept for backward compatibility, not used in new logic */
@@ -1063,21 +1077,32 @@ h1, h2, h3, h4, p, span, div, td, th, li, a, label, input, select {
 }
 
 .desc-lang {
-    font-size: 10px;
-    color: #adb5bd;
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.8) !important;
     font-style: italic;
     flex-shrink: 0;
-    width: 18px;
+    width: 22px;
 }
 
 .desc-lang-ku {
-    color: #10b981;
+    color: #4ade80 !important;
     font-weight: 700;
 }
 
 .desc-text {
-    color: #212529;
+    color: #ffffff !important;
     flex: 1;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.desc-text-ku {
+    color: #4ade80 !important;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    flex: 1;
+    font-size: 12px;
+    line-height: 1.45;
 }
 
 /* 3. Diagram Canvas Component */
@@ -1141,3 +1166,204 @@ h1, h2, h3, h4, p, span, div, td, th, li, a, label, input, select {
 }
 
 .footer-link:hover { text-decoration: underline; }
+
+/* ===== TOOLTIP & INFO HELPER SYSTEM ===== */
+.info-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 10.5px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    vertical-align: middle;
+    margin-left: 5px;
+    border: 1px solid #cbd5e1;
+    transition: all 0.15s ease;
+    user-select: none;
+    flex-shrink: 0;
+}
+.info-icon-btn:hover {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+}
+.info-icon-btn:hover {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+}
+
+.info-tooltip-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.info-tooltip-wrapper:hover .info-tooltip-content,
+.info-icon-btn:hover .info-tooltip-content {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+}
+.info-tooltip-content {
+    display: none !important;
+}
+
+/* Global Floating Tooltip (Viewport Attached - No Overflow/Clipping) */
+.floating-tooltip {
+    position: fixed;
+    z-index: 999999;
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    max-width: 280px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    white-space: normal;
+    word-break: break-word;
+}
+.floating-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.info-tooltip-content::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #0f172a transparent transparent transparent;
+}
+.info-tooltip-content.tooltip-right {
+    left: 0;
+    transform: translateX(0) translateY(4px);
+}
+.info-tooltip-content.tooltip-right::after {
+    left: 10px;
+    margin-left: 0;
+}
+
+/* ===== FAVORITES & USER SESSION ===== */
+.user-session-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    color: #1e293b;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.15s ease;
+}
+.user-session-chip:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+.card-star-btn {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.45);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+    transition: all 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.card-star-btn:hover {
+    color: #fde047;
+    transform: scale(1.18);
+}
+.card-star-btn.active {
+    color: #facc15;
+    text-shadow: 0 0 10px rgba(250, 204, 21, 0.8);
+    transform: scale(1.1);
+}
+
+.fav-count-badge {
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 9999px;
+    margin-left: 4px;
+}
+
+.favorites-pane-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    background: #ffffff;
+}
+
+.fav-card-item {
+    padding: 10px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: #f8fafc;
+    position: relative;
+}
+.fav-card-item:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+.fav-card-item.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+.fav-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.fav-sub {
+    font-size: 11px;
+    color: #64748b;
+    font-family: 'JetBrains Mono', monospace;
+}
+.btn-del-fav {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+.btn-del-fav:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}

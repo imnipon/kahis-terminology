@@ -67,6 +67,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 dbStatusPill.style.color = '#92400e';
                 dbStatusPill.style.borderColor = '#fde68a';
 
+                // Read embedded db_metadata from loaded SQLite DB to update topbar version badges
+                try {
+                    const metaRes = localDbInstance.exec("SELECT meta_key, meta_value FROM db_metadata");
+                    if (metaRes.length > 0 && metaRes[0].values.length > 0) {
+                        const metaMap = {};
+                        metaRes[0].values.forEach(r => { metaMap[r[0]] = r[1]; });
+                        if (badgeSapdt && metaMap.sapdt_badge) badgeSapdt.textContent = metaMap.sapdt_badge;
+                        if (badgeVsct  && metaMap.vsct_badge)  badgeVsct.textContent  = metaMap.vsct_badge;
+                        if (badgeSct   && metaMap.sct_badge)   badgeSct.textContent   = metaMap.sct_badge;
+                        if (badgeKu    && metaMap.ku_badge)    badgeKu.textContent    = metaMap.ku_badge;
+                    } else {
+                        const mSapdt = file.name.match(/SAPDT(\d{8})/i);
+                        const mVsct  = file.name.match(/VSCT(\d{8})/i);
+                        const mSct   = file.name.match(/SCT(\d{8})/i);
+                        const mKu    = file.name.match(/KU(\d{8})/i);
+                        if (badgeSapdt && mSapdt) badgeSapdt.textContent = `SA-PDT ${mSapdt[1]}`;
+                        if (badgeVsct  && mVsct)  badgeVsct.textContent  = `VSCT ${mVsct[1]}`;
+                        if (badgeSct   && mSct)   badgeSct.textContent   = `SCT ${mSct[1]}`;
+                        if (badgeKu    && mKu)    badgeKu.textContent    = `KU ${mKu[1]}`;
+                    }
+                } catch (metaErr) {
+                    console.log('No db_metadata table in loaded DB, checking filename:', metaErr);
+                }
+
                 if (btnResetServerDb) {
                     btnResetServerDb.style.display = 'inline-flex';
                     btnResetServerDb.classList.remove('hidden');
@@ -100,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dbStatusPill.style.borderColor = '#bbf7d0';
             btnResetServerDb.style.display = 'none';
             btnResetServerDb.classList.add('hidden');
+            initFiltersAndVersions();
             currentPage = 1;
             performSearch();
         });
@@ -125,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const badgeSapdt = document.getElementById('badgeSapdt');
     const badgeVsct = document.getElementById('badgeVsct');
     const badgeSct = document.getElementById('badgeSct');
+    const badgeKu = document.getElementById('badgeKu');
 
     // Left Search History & Settings Buttons
     const leftSettingsBtn = document.getElementById('leftSettingsBtn');
@@ -165,8 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // State Variables
     let currentQuery = '';
+    let currentSearchMode = 'prefix';
     let currentStatusMode = 'active';
-    let selectedSemanticTypes = new Set(['disorder', 'finding']);
+    let currentDescType = 'all';
+    let currentLangRefset = 'all';
+    let selectedSemanticTypes = new Set();
 
     let isGroupByConcept = true;
     let currentPage = 1;
@@ -228,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const val = item.getAttribute('data-value');
                 const text = item.textContent;
                 
-                const prefix = btn.textContent.split(':')[0];
+                const prefix = btn.textContent.split(':')[0].replace('▾', '').trim();
                 btn.textContent = `${prefix}: ${text} ▾`;
                 panel.classList.add('hidden');
 
@@ -241,7 +270,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.dropdown-panel').forEach(p => p.classList.add('hidden'));
     });
 
-    setupCustomDropdown('searchModeDropdownBtn', 'searchModePanel', () => {
+    setupCustomDropdown('searchModeDropdownBtn', 'searchModePanel', (val) => {
+        currentSearchMode = val;
         currentPage = 1;
         performSearch();
     });
@@ -252,17 +282,20 @@ document.addEventListener('DOMContentLoaded', () => {
         performSearch();
     });
 
-    setupCustomDropdown('descTypeDropdownBtn', 'descTypePanel', () => {
+    setupCustomDropdown('descTypeDropdownBtn', 'descTypePanel', (val) => {
+        currentDescType = val;
         currentPage = 1;
         performSearch();
     });
 
-    setupCustomDropdown('langRefsetDropdownBtn', 'langRefsetPanel', () => {
+    setupCustomDropdown('langRefsetDropdownBtn', 'langRefsetPanel', (val) => {
+        currentLangRefset = val;
         currentPage = 1;
         performSearch();
     });
 
-    // 3. Setup Semantic Checkbox Change Listeners
+    // 3. Setup Semantic Checkbox Change Listeners (Default All Checked)
+    selectedSemanticTypes.clear();
     semanticFilterList.querySelectorAll('input[type="checkbox"]').forEach(chk => {
         if (chk.checked) {
             selectedSemanticTypes.add(chk.value.toLowerCase());
@@ -307,17 +340,255 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    
+    // ===== GLOBAL FLOATING TOOLTIP (Viewport Attached - No Clipping / No Scrollbar) =====
+    let floatingTooltip = document.getElementById('floatingInfoTooltip');
+    if (!floatingTooltip) {
+        floatingTooltip = document.createElement('div');
+        floatingTooltip.id = 'floatingInfoTooltip';
+        floatingTooltip.className = 'floating-tooltip';
+        document.body.appendChild(floatingTooltip);
+    }
+
+    document.addEventListener('mouseover', (e) => {
+        const btn = e.target.closest('.info-icon-btn');
+        if (!btn) return;
+
+        const content = btn.getAttribute('data-tooltip') || btn.querySelector('.info-tooltip-content')?.textContent?.trim();
+        if (!content) return;
+
+        floatingTooltip.textContent = content;
+        floatingTooltip.classList.add('visible');
+
+        const rect = btn.getBoundingClientRect();
+        const tipWidth = floatingTooltip.offsetWidth || 230;
+        const tipHeight = floatingTooltip.offsetHeight || 42;
+
+        let left, top;
+        // If in left sidebar (rect.left < 260), float to the right side of the icon into the main pane
+        if (rect.left < 260) {
+            left = rect.right + 10;
+            top = rect.top + (rect.height / 2) - (tipHeight / 2);
+        } else {
+            // Centered above or below
+            left = rect.left + (rect.width / 2) - (tipWidth / 2);
+            top = rect.top - tipHeight - 8;
+        }
+
+        // Boundary checks
+        if (top < 10) top = rect.bottom + 8;
+        if (left < 10) left = 10;
+        if (left + tipWidth > window.innerWidth - 10) {
+            left = window.innerWidth - tipWidth - 10;
+        }
+
+        floatingTooltip.style.left = `${Math.round(left)}px`;
+        floatingTooltip.style.top = `${Math.round(top)}px`;
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        const btn = e.target.closest('.info-icon-btn');
+        if (btn && floatingTooltip) {
+            floatingTooltip.classList.remove('visible');
+        }
+    });
+
     // 4. Initial Setup
     initFiltersAndVersions();
     performSearch();
 
-    // 5. Under Construction Toast Popup
-    function showUnderConstructionToast() {
+    // 5. Generic Toast Notification & Under Construction Popup
+    function showToast(msg) {
+        if (!toastPopup) return;
+        toastPopup.textContent = msg;
         toastPopup.classList.remove('hidden');
-        setTimeout(() => {
+        clearTimeout(toastPopup._timer);
+        toastPopup._timer = setTimeout(() => {
             toastPopup.classList.add('hidden');
         }, 2500);
     }
+
+    function showUnderConstructionToast() {
+        showToast('ฟังก์ชันนี้อยู่ในระหว่างจัดทำ (Under Construction)');
+    }
+
+    // ===== FAVORITES SYSTEM (Simulated Clinical User Workflow) =====
+    const CURRENT_USER = {
+        id: 'vet_user_01',
+        name: 'น.สพ. นิพนธ์ วงศ์ประเสริฐ (DVM)',
+        clinic: 'คลินิกสัตว์เล็ก'
+    };
+    const FAV_STORAGE_KEY = `kahis_favorites_${CURRENT_USER.id}`;
+
+    function getFavorites() {
+        try {
+            return JSON.parse(localStorage.getItem(FAV_STORAGE_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveFavorites(favs) {
+        localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(favs));
+        updateFavoritesBadge();
+    }
+
+    function isConceptFavorite(conceptId) {
+        if (!conceptId) return false;
+        const favs = getFavorites();
+        return favs.some(f => String(f.concept_id) === String(conceptId));
+    }
+
+    function toggleFavoriteConcept(conceptData) {
+        if (!conceptData) return;
+        const cid = String(conceptData.snomed_concept_id || conceptData.concept_id || conceptData.sapdt_concept_id || '');
+        if (!cid) return;
+
+        let favs = getFavorites();
+        const existingIndex = favs.findIndex(f => String(f.concept_id) === cid);
+
+        const btn = document.getElementById('btnToggleFavorite');
+        const starIcon = document.getElementById('starIcon');
+
+        if (existingIndex >= 0) {
+            const removedTitle = favs[existingIndex].title;
+            favs.splice(existingIndex, 1);
+            saveFavorites(favs);
+            if (btn) btn.classList.remove('active');
+            if (starIcon) starIcon.textContent = '☆';
+            showToast(`ลบ "${removedTitle}" ออกจาก Favorites แล้ว`);
+        } else {
+            const itemTitle = conceptData.display_name || conceptData.snomed_preferred_term || conceptData.snomed_fsn || cid;
+            const newItem = {
+                concept_id: cid,
+                title: itemTitle,
+                fsn: conceptData.snomed_fsn || itemTitle,
+                semantic_type: conceptData.snomed_semantic_type || '',
+                in_sapdt: conceptData.in_sapdt || 'No',
+                in_vsct: conceptData.in_vsct || 'No',
+                in_sct_inter: conceptData.in_sct_inter || 'No',
+                definition_status: conceptData.snomed_definition_status || '',
+                added_at: new Date().toISOString()
+            };
+            favs.unshift(newItem);
+            saveFavorites(favs);
+            if (btn) btn.classList.add('active');
+            if (starIcon) starIcon.textContent = '★';
+            showToast(`บันทึก "${itemTitle}" ใน Favorites เรียบร้อย`);
+        }
+
+        renderFavoritesPane();
+    }
+
+    function updateFavoritesBadge() {
+        const favs = getFavorites();
+        const countBadge = document.getElementById('favCountBadge');
+        if (countBadge) countBadge.textContent = favs.length;
+        const countText = document.getElementById('favListCountText');
+        if (countText) countText.textContent = `${favs.length} รายการ`;
+    }
+
+    function renderFavoritesPane() {
+        const favs = getFavorites();
+        const container = document.getElementById('favoritesListContainer');
+        if (!container) return;
+
+        updateFavoritesBadge();
+
+        if (!favs || favs.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:40px 15px; color:#94a3b8; font-size:13px;">
+                    <div style="font-size:32px; margin-bottom:8px; opacity:0.6;">⭐</div>
+                    <strong>ยังไม่มีรายการที่บันทึกไว้</strong><br>
+                    <span style="font-size:12px; color:#64748b; margin-top:4px; display:inline-block;">กดปุ่มรูปดาว ⭐ ในกล่องสีฟ้า เพื่อบันทึกคำศัพท์ที่ใช้บ่อย</span>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = '';
+        favs.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'fav-card-item';
+            
+            let badgesHtml = '';
+            if (item.in_sapdt === 'Yes') badgesHtml += '<span class="badge-micro badge-sapdt">SA-PDT</span>';
+            if (item.in_vsct === 'Yes') badgesHtml += '<span class="badge-micro badge-vsct">VSCT</span>';
+            if (item.semantic_type) badgesHtml += `<span class="badge-micro" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">${escapeHtml(item.semantic_type)}</span>`;
+
+            row.innerHTML = `
+                <div class="fav-card-info" style="flex:1; cursor:pointer;">
+                    <div class="fav-card-title" style="font-weight:600; font-size:13px; color:#0f172a;">${escapeHtml(item.title)}</div>
+                    <div class="fav-card-sub" style="font-size:11.5px; color:#64748b; margin-top:2px;">ID: ${escapeHtml(item.concept_id)} ${badgesHtml}</div>
+                </div>
+                <button class="btn-del-fav" title="ลบออกจาก Favorites" style="background:none; border:none; cursor:pointer; color:#94a3b8; font-size:15px; padding:4px 8px; border-radius:4px; transition:all 0.15s;">✕</button>
+            `;
+
+            row.querySelector('.fav-card-info').addEventListener('click', () => {
+                loadConceptDetails(item.concept_id);
+            });
+
+            row.querySelector('.btn-del-fav').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleFavoriteConcept(item);
+            });
+
+            container.appendChild(row);
+        });
+    }
+
+    function updateFavoriteButtonState(conceptId) {
+        const btn = document.getElementById('btnToggleFavorite');
+        const starIcon = document.getElementById('starIcon');
+        if (!btn || !starIcon) return;
+        if (isConceptFavorite(conceptId)) {
+            btn.classList.add('active');
+            starIcon.textContent = '★';
+        } else {
+            btn.classList.remove('active');
+            starIcon.textContent = '☆';
+        }
+    }
+
+    // Tab Switching: Search vs Favorites
+    const tabSearchBtn = document.getElementById('tabSearchBtn');
+    const tabFavoritesBtn = document.getElementById('tabFavoritesBtn');
+    const searchPaneBody = document.querySelector('.search-pane-body');
+    const favoritesPaneContent = document.getElementById('favoritesPaneContent');
+
+    if (tabSearchBtn && tabFavoritesBtn) {
+        tabSearchBtn.addEventListener('click', () => {
+            tabSearchBtn.classList.add('active');
+            tabFavoritesBtn.classList.remove('active');
+            if (searchPaneBody) searchPaneBody.classList.remove('hidden');
+            if (favoritesPaneContent) favoritesPaneContent.classList.add('hidden');
+        });
+
+        tabFavoritesBtn.addEventListener('click', () => {
+            tabFavoritesBtn.classList.add('active');
+            tabSearchBtn.classList.remove('active');
+            if (searchPaneBody) searchPaneBody.classList.add('hidden');
+            if (favoritesPaneContent) {
+                favoritesPaneContent.classList.remove('hidden');
+                renderFavoritesPane();
+            }
+        });
+    }
+
+    // Star Button Toggle Click Listener
+    const btnToggleFavorite = document.getElementById('btnToggleFavorite');
+    if (btnToggleFavorite) {
+        btnToggleFavorite.addEventListener('click', () => {
+            if (!currentConceptData) {
+                alert('กรุณาเลือกมโนทัศน์ก่อนทำการบันทึก Favorites');
+                return;
+            }
+            toggleFavoriteConcept(currentConceptData);
+        });
+    }
+
+    // Initialize Favorites UI Badge on Load
+    updateFavoritesBadge();
 
     if (leftSettingsBtn) leftSettingsBtn.addEventListener('click', showUnderConstructionToast);
     if (rightSettingsBtn) rightSettingsBtn.addEventListener('click', showUnderConstructionToast);
@@ -515,9 +786,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
 
             if (data.release_versions) {
-                badgeSapdt.textContent = data.release_versions.sapdt || 'SA-PDT 20260331';
-                badgeVsct.textContent = data.release_versions.vsct || 'VSCT 20260331';
-                badgeSct.textContent = data.release_versions.sct || 'SCT 20260701';
+                if (badgeSapdt) badgeSapdt.textContent = data.release_versions.sapdt || 'SA-PDT 20260930';
+                if (badgeVsct)  badgeVsct.textContent  = data.release_versions.vsct  || 'VSCT 20260930';
+                if (badgeSct)   badgeSct.textContent   = data.release_versions.sct   || 'SCT 20261101';
+                if (badgeKu)    badgeKu.textContent    = data.release_versions.ku    || 'KU 20261106';
             }
         } catch (err) {
             console.error('Failed to load filters:', err);
@@ -548,13 +820,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams({
             q: currentQuery,
             status: currentStatusMode,
+            search_mode: currentSearchMode,
+            desc_type: currentDescType,
+            lang_refset: currentLangRefset,
             group_by_concept: isGroupByConcept ? 'true' : 'false',
             global_search: isGlobal ? 'true' : 'false',
             limit: pageSize,
             offset: offset
         });
 
-        Array.from(selectedSemanticTypes).forEach(st => params.append('semantic_type', st));
+        if (selectedSemanticTypes.size === 0) {
+            params.append('empty_semantic', '1');
+        } else {
+            Array.from(selectedSemanticTypes).forEach(st => params.append('semantic_type', st));
+        }
 
         if (!currentQuery) {
             totalResults = 0;
@@ -565,10 +844,97 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // When all semantic filters are unchecked, immediately show 0 matches
+        if (selectedSemanticTypes.size === 0) {
+            totalResults = 0;
+            matchCountBar.textContent = '0 matches found in 0.00 seconds.';
+            resultsTableBody.innerHTML = '<tr><td colspan="2" class="empty-msg">No matches found (all semantic filters unchecked)</td></tr>';
+            updateSemanticCountBadges({});
+            updatePagination();
+            return;
+        }
+
         // Save query to search history
         saveQueryToSearchHistory(currentQuery);
 
         resultsTableBody.innerHTML = '<tr><td colspan="2" class="empty-msg">Searching...</td></tr>';
+
+        if (localDbInstance) {
+            try {
+                const t0 = performance.now();
+                const whereClauses = ["(in_sapdt = 'Yes' OR in_vsct = 'Yes')"];
+                const activeCond = "((in_sapdt = 'Yes' AND sapdt_status = 'Active') OR (in_vsct = 'Yes' AND snomed_active = 'Yes'))";
+                if (currentStatusMode === 'active') whereClauses.push(activeCond);
+                else if (currentStatusMode === 'inactive') whereClauses.push(`NOT ${activeCond}`);
+
+                const sqlParams = [];
+                if (/^\d+$/.test(currentQuery)) {
+                    whereClauses.push("(snomed_concept_id LIKE ? OR sapdt_concept_id LIKE ? OR sapdt_description_id LIKE ?)");
+                    sqlParams.push(`${currentQuery}%`, `${currentQuery}%`, `${currentQuery}%`);
+                } else {
+                    const words = currentQuery.replace(/["']/g, '').split(/\s+/).filter(Boolean);
+                    words.forEach(w => {
+                        whereClauses.push(`(display_name LIKE ? OR synonym LIKE ? OR snomed_fsn LIKE ? OR sapdt_fsn LIKE ? OR snomed_preferred_term LIKE ? OR snomed_all_synonyms LIKE ? OR COALESCE(snomed_concept_id, sapdt_concept_id) IN (SELECT concept_id FROM ku_synonym_text WHERE ku_synonym_text LIKE ?))`);
+                        const pat = `%${w}%`;
+                        sqlParams.push(pat, pat, pat, pat, pat, pat, pat);
+                    });
+                }
+
+                const baseWhereSql = " WHERE " + whereClauses.join(" AND ");
+                const baseParams = [...sqlParams];
+
+                if (selectedSemanticTypes.size > 0) {
+                    const stClauses = [];
+                    selectedSemanticTypes.forEach(st => {
+                        stClauses.push("snomed_semantic_type LIKE ?");
+                        sqlParams.push(`%${st}%`);
+                    });
+                    whereClauses.push("(" + stClauses.join(" OR ") + ")");
+                }
+
+                const whereSql = " WHERE " + whereClauses.join(" AND ");
+                const groupSql = isGroupByConcept ? " GROUP BY COALESCE(NULLIF(snomed_concept_id,''), sapdt_concept_id) " : "";
+                const cntRes = localDbInstance.exec(`SELECT COUNT(DISTINCT COALESCE(NULLIF(snomed_concept_id,''), sapdt_concept_id)) FROM terms ${whereSql}`, sqlParams);
+                totalResults = (cntRes.length > 0 && cntRes[0].values.length > 0) ? cntRes[0].values[0][0] : 0;
+
+                const firstWord = currentQuery.split(/\s+/)[0] || '';
+                const dataSql = `
+                    SELECT id, display_name, in_sapdt, in_vsct, in_sct_inter, sapdt_concept_id,
+                           snomed_concept_id, snomed_fsn, snomed_preferred_term, snomed_semantic_type,
+                           body_system, match_type, synonym, snomed_definition_status, sapdt_status, snomed_active
+                    FROM terms ${whereSql} ${groupSql}
+                    ORDER BY CASE WHEN display_name LIKE ? THEN 1 ELSE 2 END, length(display_name) ASC
+                    LIMIT ? OFFSET ?
+                `;
+                const dataRes = localDbInstance.exec(dataSql, [...sqlParams, `${firstWord}%`, pageSize, offset]);
+                const rows = [];
+                if (dataRes.length > 0) {
+                    const cols = dataRes[0].columns;
+                    dataRes[0].values.forEach(r => {
+                        const obj = {};
+                        cols.forEach((c, idx) => obj[c] = r[idx]);
+                        rows.push(obj);
+                    });
+                }
+
+                const semCounts = {};
+                const stRes = localDbInstance.exec(`SELECT snomed_semantic_type, COUNT(DISTINCT COALESCE(NULLIF(snomed_concept_id,''), sapdt_concept_id)) FROM terms ${baseWhereSql} GROUP BY snomed_semantic_type`, baseParams);
+                if (stRes.length > 0) {
+                    stRes[0].values.forEach(r => {
+                        if (r[0]) semCounts[String(r[0]).toLowerCase()] = r[1];
+                    });
+                }
+
+                const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+                matchCountBar.textContent = `${totalResults} matches found in ${elapsed} seconds (Local SQLite).`;
+                renderResultsTable(rows);
+                updateSemanticCountBadges(semCounts);
+                updatePagination();
+                return;
+            } catch (localErr) {
+                console.error('Local SQLite search error:', localErr);
+            }
+        }
 
         try {
             const res = await fetch(`/api/search?${params}`);
@@ -602,8 +968,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isFullyDefined = item.snomed_definition_status === '900000000000073002';
             const iconHtml = isFullyDefined
-                ? '<span class="icon-menu" title="Fully Defined Concept">≡</span>'
-                : '<span class="icon-circle" title="Primitive Concept">○</span>';
+                ? '<span class="icon-menu" title="Fully Defined Concept (มโนทัศน์ที่นิยามครบถ้วน)">≡</span>'
+                : '<span class="icon-primitive" title="Primitive Concept (มโนทัศน์พื้นฐาน)"></span>';
 
             const isAct = (item.in_sapdt === 'Yes' && item.sapdt_status === 'Active') ||
                           (item.in_vsct === 'Yes' && item.snomed_active === 'Yes');
@@ -742,6 +1108,24 @@ document.addEventListener('DOMContentLoaded', () => {
         conceptTitle.textContent = `${titleTerm}${semanticTag}`;
         conceptSctid.textContent = data.snomed_concept_id || data.concept_id;
 
+        // Dynamic Concept Type Icon (Fully Defined ≡ vs Primitive ○ ring)
+        const cardTypeIcon = document.getElementById('conceptCardTypeIcon');
+        if (cardTypeIcon) {
+            const isDef = data.snomed_definition_status === '900000000000073002';
+            if (isDef) {
+                cardTypeIcon.className = 'card-type-icon';
+                cardTypeIcon.textContent = '≡';
+                cardTypeIcon.title = 'Fully Defined Concept';
+            } else {
+                cardTypeIcon.className = 'card-type-icon-primitive';
+                cardTypeIcon.textContent = '';
+                cardTypeIcon.title = 'Primitive Concept';
+            }
+        }
+
+        // Update Favorite Star button state
+        updateFavoriteButtonState(data.snomed_concept_id || data.concept_id || data.sapdt_concept_id);
+
         // Clean ID line display (hide redundant SA-PDT ID if identical to SNOMED Concept ID)
         if (data.sapdt_concept_id && data.sapdt_concept_id !== (data.snomed_concept_id || data.concept_id)) {
             sapdtIdLine.style.display = 'block';
@@ -764,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         conceptFsnFull.textContent = `${data.concept_id} | ${data.snomed_fsn || titleTerm} |`;
 
-        // Synonyms & Descriptions — SCT-01 FIX + CONFLICT-04 FIX
+        // Synonyms & Descriptions — English White, KU Vibrant Green
         synonymListUl.innerHTML = '';
         const descList = data.descriptions || [];
 
@@ -777,13 +1161,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 let badgeClass = 'desc-badge-syn';
                 if (d.type === 'FSN')       badgeClass = 'desc-badge-fsn';
                 if (d.type === 'Preferred') badgeClass = 'desc-badge-pt';
-                if (d.type === 'ku')        badgeClass = 'desc-badge-syn';
+                if (d.type === 'ku')        badgeClass = 'desc-badge-syn desc-badge-ku';
 
                 let badgeText = d.type === 'ku' ? 'Synonym' : d.type;
-                let langClass = d.type === 'ku' ? 'desc-lang desc-lang-ku' : 'desc-lang';
-                let textStyle = d.type === 'ku' ? 'style="font-weight:600; color:#10b981;"' : '';
 
-                li.innerHTML = `<span class="desc-type-badge ${badgeClass}">${escapeHtml(badgeText)}</span> <span class="${langClass}">${escapeHtml(d.lang || 'en')}</span> <span class="desc-text" ${textStyle}>${escapeHtml(d.text)}</span>`;
+                if (d.type === 'ku') {
+                    li.innerHTML = `<span class="desc-type-badge ${badgeClass}">${escapeHtml(badgeText)}</span> <span class="desc-lang desc-lang-ku">ku</span> <span class="desc-text-ku">${escapeHtml(d.text)}</span>`;
+                } else {
+                    li.innerHTML = `<span class="desc-type-badge ${badgeClass}">${escapeHtml(badgeText)}</span> <span class="desc-lang">${escapeHtml(d.lang || 'en')}</span> <span class="desc-text">${escapeHtml(d.text)}</span>`;
+                }
                 synonymListUl.appendChild(li);
             });
         } else {
@@ -1149,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const isPending = data.status === 'pending';
                         const badgeText = isPending ? 'Pending' : 'Synonym';
                         const badgeStyle = isPending ? 'background:#fef3c7; color:#b45309; border:1px solid #fde68a;' : '';
-                        li.innerHTML = `<span class="desc-type-badge desc-badge-syn" style="${badgeStyle}">${escapeHtml(badgeText)}</span> <span class="desc-lang desc-lang-ku">ku</span> <span class="desc-text" style="font-weight:600; color:#10b981;">${escapeHtml(data.synonym_text)}</span> <small style="color:#64748b; font-size:11px; margin-left:4px;">(${isPending ? 'รออนุมัติ' : 'อนุมัติแล้ว'})</small>`;
+                        li.innerHTML = `<span class="desc-type-badge desc-badge-syn desc-badge-ku" style="${badgeStyle}">${escapeHtml(badgeText)}</span> <span class="desc-lang desc-lang-ku">ku</span> <span class="desc-text-ku">${escapeHtml(data.synonym_text)}</span> <small style="color:#cbd5e1; font-size:11px; margin-left:4px;">(${isPending ? 'รออนุมัติ' : 'อนุมัติแล้ว'})</small>`;
                         synonymListUl.appendChild(li);
                     }
                 });

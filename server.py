@@ -2,7 +2,8 @@
 """
 server.py
 HTTP Server & REST API for SA-PDT & SNOMED CT Veterinary Extension for KAHIS
-Implements multi-word AND search, concept grouping, and filter hit counters.
+Implements multi-word AND search, concept grouping, filter hit counters,
+3-Source + KU version metadata (db_metadata), and sources/ folder discovery.
 """
 
 import http.server
@@ -15,6 +16,8 @@ import sys
 import time
 import glob
 import re
+import csv
+import shutil
 
 PORT = int(os.environ.get('PORT', 8080))
 
@@ -24,27 +27,102 @@ PORT = int(os.environ.get('PORT', 8080))
 #   - Drive letter (C:\ vs D:\ on Windows)
 #   - Username or home directory (/Users/nipon vs /Users/other)
 #   - Project folder name (ku-sa-pdt or any other name)
-APP_DIR   = os.path.dirname(os.path.abspath(__file__))  # .../kahis-terminology-app/
-KAHIS_DIR = os.path.dirname(APP_DIR)                     # .../kahis-terminology/
-DB_FILE   = os.path.join(APP_DIR, 'terminology_search.db')
-STATIC_DIR = os.path.join(APP_DIR, 'static')
+APP_DIR      = os.path.dirname(os.path.abspath(__file__))  # .../kahis-terminology/
+KAHIS_DIR    = os.path.dirname(APP_DIR)                    # .../imnipon_project/
+DB_FILE      = os.path.join(APP_DIR, 'terminology_search.db')
+STATIC_DIR   = os.path.join(APP_DIR, 'static')
+SOURCES_DIR  = os.path.join(APP_DIR, 'sources')
+RELEASES_DIR = os.path.join(APP_DIR, 'releases')
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
+def sync_ku_synonyms_to_versioned_csv(conn=None):
+    """Sync ku_synonym_text table to sources/4_KU-Custom/ku_synonym_text_YYYYMMDD.csv and update db_metadata."""
+    close_after = False
+    try:
+        if conn is None:
+            conn = get_db()
+            close_after = True
+        cur = conn.cursor()
+        ku_ver = time.strftime('%Y%m%d')
+        ku_dir = os.path.join(SOURCES_DIR, '4_KU-Custom')
+        archive_data_dir = os.path.join(APP_DIR, 'archive', 'legacy_data')
+        os.makedirs(ku_dir, exist_ok=True)
+        os.makedirs(archive_data_dir, exist_ok=True)
+        ku_csv_path = os.path.join(ku_dir, f'ku_synonym_text_{ku_ver}.csv')
+
+        # Move older dated ku_synonym_text_*.csv files to archive/legacy_data/
+        for old_csv in glob.glob(os.path.join(ku_dir, 'ku_synonym_text_*.csv')):
+            if os.path.abspath(old_csv) != os.path.abspath(ku_csv_path):
+                dst_old = os.path.join(archive_data_dir, os.path.basename(old_csv))
+                if os.path.exists(dst_old):
+                    os.remove(dst_old)
+                shutil.move(old_csv, dst_old)
+
+        cur.execute("""
+            SELECT k.id, k.concept_id, COALESCE(t.display_name, ''), COALESCE(t.snomed_fsn, ''),
+                   k.ku_synonym_text, k.lang_tag, k.created_at
+            FROM ku_synonym_text k
+            LEFT JOIN terms t ON (t.snomed_concept_id = k.concept_id OR t.sapdt_concept_id = k.concept_id)
+            ORDER BY k.id
+        """)
+        rows = cur.fetchall()
+        with open(ku_csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['id', 'concept_id', 'display_name', 'snomed_fsn', 'ku_synonym_text', 'lang_tag', 'created_at'])
+            writer.writerows(rows)
+
+        # Update db_metadata if table exists
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_metadata'")
+        if cur.fetchone():
+            cur.execute("INSERT OR REPLACE INTO db_metadata (meta_key, meta_value) VALUES (?, ?)", ('ku_version', ku_ver))
+            cur.execute("INSERT OR REPLACE INTO db_metadata (meta_key, meta_value) VALUES (?, ?)", ('ku_badge', f'KU {ku_ver}'))
+            conn.commit()
+    except Exception as e:
+        print(f"[WARN] sync_ku_synonyms_to_versioned_csv: {e}")
+    finally:
+        if close_after and conn:
+            conn.close()
+
 def get_release_versions():
-    """Auto-detect release dates from source folder/zip names across search roots."""
+    """Read release versions from db_metadata table first, then auto-detect from sources/ folder."""
     sapdt_date = "N/A"
     vsct_date  = "N/A"
     sct_date   = "N/A"
+    ku_date    = "N/A"
+    release_tag = ""
+    built_at    = ""
 
+    # 1. Read embedded db_metadata from active SQLite database if available
+    if os.path.exists(DB_FILE):
+        try:
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_metadata'")
+            if cur.fetchone():
+                cur.execute("SELECT meta_key, meta_value FROM db_metadata")
+                meta = {r[0]: r[1] for r in cur.fetchall()}
+                if meta.get('sapdt_version'): sapdt_date = meta['sapdt_version']
+                if meta.get('vsct_version'):  vsct_date  = meta['vsct_version']
+                if meta.get('sct_version'):   sct_date   = meta['sct_version']
+                if meta.get('ku_version'):    ku_date    = meta['ku_version']
+                release_tag = meta.get('release_tag', '')
+                built_at    = meta.get('built_at', '')
+            conn.close()
+        except Exception:
+            pass
+
+    # 2. Scan standardized sources/ folder and fallback roots
     roots = [
+        os.path.join(SOURCES_DIR, '1_SA-PDT'),
+        os.path.join(SOURCES_DIR, '2_VSCT'),
+        os.path.join(SOURCES_DIR, '3_SCT-Int'),
+        os.path.join(SOURCES_DIR, '4_KU-Custom'),
+        SOURCES_DIR,
         APP_DIR,
-        KAHIS_DIR,
-        os.path.dirname(KAHIS_DIR),
-        os.path.expanduser('~/Downloads'),
     ]
     roots = [r for r in roots if r and os.path.exists(r)]
 
@@ -54,14 +132,18 @@ def get_release_versions():
         for pat in [
             os.path.join(r, 'SA-PDT*', '**', 'SA-PDTReleaseFile_full_*.txt'),
             os.path.join(r, 'SA-PDT*', 'SA-PDTReleaseFile_full_*.txt'),
+            os.path.join(r, 'SA-PDT*', '**', 'SA-PDTReleaseFile_full_*.xml'),
             os.path.join(r, 'Small Animal Problem*', '**', 'SA-PDTReleaseFile_full_*.txt'),
             os.path.join(r, 'SA-PDT*'),
         ]:
             sapdt_candidates.extend(glob.glob(pat, recursive=True))
+    sapdt_source_file = ""
     for cand in sorted(sapdt_candidates, key=lambda p: os.path.basename(p), reverse=True):
         m = re.search(r'(\d{8})', os.path.basename(cand))
         if m:
-            sapdt_date = m.group(1)
+            sapdt_source_file = os.path.basename(cand)
+            if sapdt_date == "N/A":
+                sapdt_date = m.group(1)
             break
 
     # VSCT
@@ -72,34 +154,69 @@ def get_release_versions():
             os.path.join(r, 'Small Animal Problem*', 'SnomedCT_VETExtension_*'),
         ]:
             vsct_candidates.extend(glob.glob(pat))
+    vsct_source_file = ""
     for cand in sorted(vsct_candidates, key=lambda p: os.path.basename(p), reverse=True):
         m = re.search(r'(\d{8})', os.path.basename(cand))
         if m:
-            vsct_date = m.group(1)
+            vsct_source_file = os.path.basename(cand)
+            if vsct_date == "N/A":
+                vsct_date = m.group(1)
             break
 
     # SCT International
     sct_candidates = []
     for r in roots:
         sct_candidates.extend(glob.glob(os.path.join(r, 'SnomedCT_InternationalRF2_*')))
+    sct_source_file = ""
     for cand in sorted(sct_candidates, key=lambda p: os.path.basename(p), reverse=True):
         m = re.search(r'(\d{8})', os.path.basename(cand))
         if m:
-            sct_date = m.group(1)
+            sct_source_file = os.path.basename(cand)
+            if sct_date == "N/A":
+                sct_date = m.group(1)
+            break
+
+    # KU Custom Synonym CSV
+    ku_candidates = []
+    for r in roots:
+        ku_candidates.extend(glob.glob(os.path.join(r, 'ku_synonym_text_*.csv')))
+    ku_source_file = ""
+    for cand in sorted(ku_candidates, key=lambda p: os.path.basename(p), reverse=True):
+        m = re.search(r'(\d{8})', os.path.basename(cand))
+        if m:
+            ku_source_file = os.path.basename(cand)
+            if ku_date == "N/A":
+                ku_date = m.group(1)
             break
 
     # Fallback to current release versions if source files not found in deployment
     if sapdt_date == "N/A":
-        sapdt_date = "20260331"
+        sapdt_date = "20260930"
     if vsct_date == "N/A":
-        vsct_date = "20260331"
+        vsct_date = "20260930"
     if sct_date == "N/A":
-        sct_date = "20260701"
+        sct_date = "20261101"
+    if ku_date == "N/A":
+        ku_date = "20261106"
+
+    if not release_tag:
+        release_tag = f"kahis_SAPDT{sapdt_date}_VSCT{vsct_date}_SCT{sct_date}_KU{ku_date}"
 
     return {
-        'sapdt': f"SA-PDT {sapdt_date}",
-        'vsct':  f"VSCT {vsct_date}",
-        'sct':   f"SCT {sct_date}"
+        'sapdt':        f"SA-PDT {sapdt_date}",
+        'vsct':         f"VSCT {vsct_date}",
+        'sct':          f"SCT {sct_date}",
+        'ku':           f"KU {ku_date}",
+        'sapdt_ver':    sapdt_date,
+        'vsct_ver':     vsct_date,
+        'sct_ver':      sct_date,
+        'ku_ver':       ku_date,
+        'sapdt_source': sapdt_source_file,
+        'vsct_source':  vsct_source_file,
+        'sct_source':   sct_source_file,
+        'ku_source':    ku_source_file,
+        'release_tag':  release_tag,
+        'built_at':     built_at
     }
 
 class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
@@ -143,6 +260,9 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         elif path == '/api/admin/verify':
             # GET /api/admin/verify — Run automated QA audit on terminology_search.db
             self.handle_verify_db()
+        elif path == '/api/admin/sync_firestore':
+            # GET /api/admin/sync_firestore — Merge approved Firestore synonyms into local SQLite
+            self.handle_sync_firestore()
         elif path == '/api/ku_synonym':
             # GET /api/ku_synonym?concept_id=XXX  — list ku synonyms for a concept
             cid = query_params.get('concept_id', [''])[0]
@@ -236,6 +356,30 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
 
+    def handle_sync_firestore(self):
+        """GET /api/admin/sync_firestore — Run scripts/export_sqlite_from_firestore.py and return output."""
+        import subprocess
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scripts', 'export_sqlite_from_firestore.py')
+        if not os.path.exists(script):
+            self.send_json({'error': f'export_sqlite_from_firestore.py not found at {script}'}, status=404)
+            return
+        try:
+            res = subprocess.run(
+                [sys.executable, script],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=60
+            )
+            self.send_json({
+                'ok': res.returncode == 0,
+                'returncode': res.returncode,
+                'report': (res.stdout or '') + (res.stderr or '')
+            })
+        except Exception as e:
+            self.send_json({'error': str(e)}, status=500)
+
     def handle_verify_db(self):
         """GET /api/admin/verify — Run scripts/verify_db.py and return QA audit output."""
         import subprocess
@@ -305,6 +449,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
 
             backup_dir = os.path.join(APP_DIR, 'backup')
             backup_count = len(glob.glob(os.path.join(backup_dir, '*.db*'))) if os.path.exists(backup_dir) else 0
+            release_count = len(glob.glob(os.path.join(RELEASES_DIR, '*.db'))) if os.path.exists(RELEASES_DIR) else 0
             db_mtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(db_path))) if os.path.exists(db_path) else 'N/A'
 
             self.send_json({
@@ -319,9 +464,11 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 'global_relationships': global_rels,
                 'db_size_mb':           db_size_mb,
                 'gz_size_mb':           gz_size_mb,
-                'backup_count':         backup_count,
+                'backup_count':         backup_count + release_count,
+                'release_count':        release_count,
                 'db_last_modified':     db_mtime,
-                'semantic_counts':      sem_dist
+                'semantic_counts':      sem_dist,
+                'release_versions':     get_release_versions()
             })
         except Exception as e:
             self.send_json({'error': str(e)}, status=500)
@@ -347,6 +494,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                         cur.execute("INSERT INTO ku_synonym_text (concept_id, ku_synonym_text, lang_tag) VALUES (?, ?, ?)", (cid, text, lang))
                         imported_count += 1
             conn.commit()
+            sync_ku_synonyms_to_versioned_csv(conn)
             conn.close()
             self.send_json({'ok': True, 'imported': imported_count})
         except Exception as e:
@@ -354,7 +502,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_export_master(self):
         """GET /api/admin/export/master — stream master CSV file."""
-        import csv, io
+        import io
         output_dir = os.path.join(APP_DIR, '..', 'output')
         os.makedirs(output_dir, exist_ok=True)
         out_path = os.path.join(output_dir, 'master_kahis_terminology.csv')
@@ -387,8 +535,8 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({'error': str(e)}, status=500)
 
     def handle_export_ku(self):
-        """GET /api/admin/export/ku — stream ku_custom_synonyms CSV."""
-        import csv, io
+        """GET /api/admin/export/ku — stream ku_custom_synonyms CSV and sync to sources/4_KU-Custom/."""
+        import io
         output_dir = os.path.join(APP_DIR, '..', 'output')
         os.makedirs(output_dir, exist_ok=True)
         out_path = os.path.join(output_dir, 'ku_custom_synonyms.csv')
@@ -404,6 +552,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             """)
             cols = ['id','concept_id','display_name','snomed_fsn','ku_synonym_text','lang_tag','created_at']
             rows = cur.fetchall()
+            sync_ku_synonyms_to_versioned_csv(conn)
             conn.close()
 
             buf = io.StringIO()
@@ -415,9 +564,10 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             with open(out_path, 'wb') as f:
                 f.write(csv_bytes)
 
+            ku_ver = time.strftime('%Y%m%d')
             self.send_response(200)
             self.send_header('Content-Type', 'text/csv; charset=utf-8')
-            self.send_header('Content-Disposition', 'attachment; filename="ku_custom_synonyms.csv"')
+            self.send_header('Content-Disposition', f'attachment; filename="ku_synonym_text_{ku_ver}.csv"')
             self.send_header('Content-Length', str(len(csv_bytes)))
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
@@ -426,7 +576,6 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({'error': str(e)}, status=500)
 
     def handle_get_ku_synonyms(self, concept_id):
-
         """GET /api/ku_synonym?concept_id=XXX"""
         if not concept_id:
             self.send_json({'error': 'concept_id required'}, status=400)
@@ -474,6 +623,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             )
             conn.commit()
             new_id = cur.lastrowid
+            sync_ku_synonyms_to_versioned_csv(conn)
             conn.close()
             self.send_json({'ok': True, 'id': new_id, 'concept_id': concept_id, 'text': text})
         except Exception as e:
@@ -491,6 +641,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             cur.execute('DELETE FROM ku_synonym_text WHERE id = ?', (int(syn_id),))
             deleted = cur.rowcount
             conn.commit()
+            sync_ku_synonyms_to_versioned_csv(conn)
             conn.close()
             if deleted == 0:
                 self.send_json({'error': f'No row with id={syn_id}'}, status=404)
@@ -513,8 +664,6 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         cursor = conn.cursor()
 
         # CONFLICT-01 FIX: Active = SA-PDT Active OR VSCT Active (OR logic, not AND)
-        # Old (wrong): only show if SA-PDT active; if in_sapdt='Yes' it ignored VSCT status entirely
-        # New (correct): show if ANY of the sources is active
         active_where = """
         WHERE (in_sapdt = 'Yes' OR in_vsct = 'Yes')
           AND (
@@ -543,9 +692,25 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         q = params.get('q', [''])[0].strip()
         stypes = params.get('semantic_type', [])
         status_mode = params.get('status', ['active'])[0].lower()
+        search_mode = params.get('search_mode', ['prefix'])[0].lower()
+        desc_type = params.get('desc_type', ['all'])[0].lower()
+        lang_refset = params.get('lang_refset', ['all'])[0].lower()
+        empty_semantic = params.get('empty_semantic', ['false'])[0].lower() == 'true'
         group_by = params.get('group_by_concept', ['true'])[0].lower() == 'true'
         limit = int(params.get('limit', ['50'])[0])
         offset = int(params.get('offset', ['0'])[0])
+
+        # If user disabled all semantic filters, return 0 matches immediately
+        if empty_semantic:
+            self.send_json({
+                'total': 0,
+                'limit': limit,
+                'offset': offset,
+                'results': [],
+                'semantic_counts': {},
+                'elapsed_sec': '0.00'
+            })
+            return
 
         conn = get_db()
         cursor = conn.cursor()
@@ -554,8 +719,6 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         where_clauses = ["(in_sapdt = 'Yes' OR in_vsct = 'Yes')"]
 
         # CONFLICT-01 FIX: Active/Inactive uses OR logic
-        # Active  = SA-PDT Active  OR  VSCT Active
-        # Inactive = NOT (SA-PDT Active OR VSCT Active)  AND still in SA-PDT/VSCT
         ACTIVE_COND   = "((in_sapdt = 'Yes' AND sapdt_status = 'Active') OR (in_vsct = 'Yes' AND snomed_active = 'Yes'))"
         INACTIVE_COND = "NOT ((in_sapdt = 'Yes' AND sapdt_status = 'Active') OR (in_vsct = 'Yes' AND snomed_active = 'Yes'))"
 
@@ -566,7 +729,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
 
         sql_params = []
 
-        # Multi-word AND search condition (e.g. 'shou frac')
+        # Multi-word search condition with search_mode & desc_type support
         if q:
             if q.isdigit():
                 where_clauses.append("(snomed_concept_id LIKE ? OR sapdt_concept_id LIKE ? OR sapdt_description_id LIKE ?)")
@@ -575,15 +738,51 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                 clean_q = q.replace('"', '').replace("'", "")
                 words = clean_q.split()
                 for word in words:
-                    where_clauses.append("""
-                    (display_name LIKE ? OR synonym LIKE ? OR snomed_fsn LIKE ? OR sapdt_fsn LIKE ? OR 
-                     snomed_preferred_term LIKE ? OR snomed_all_synonyms LIKE ? OR 
-                     COALESCE(snomed_concept_id, sapdt_concept_id) IN (
-                         SELECT concept_id FROM ku_synonym_text WHERE ku_synonym_text LIKE ?
-                     ))
-                    """)
-                    like_pat = f"%{word}%"
-                    sql_params.extend([like_pat, like_pat, like_pat, like_pat, like_pat, like_pat, like_pat])
+                    # Determine pattern based on search_mode
+                    if search_mode == 'exact':
+                        word_pat = word
+                        like_op = "= ?"
+                    elif search_mode == 'partial':
+                        word_pat = f"%{word}%"
+                        like_op = "LIKE ?"
+                    else:  # default 'prefix'
+                        word_pat = f"{word}%"
+                        like_op = "LIKE ?"
+
+                    # Determine search fields based on desc_type and lang_refset
+                    sub_fields = []
+                    sub_params = []
+
+                    # FSN / Title
+                    if desc_type in ('all', 'fsn'):
+                        sub_fields.append(f"snomed_fsn {like_op}")
+                        sub_params.append(word_pat)
+                        sub_fields.append(f"sapdt_fsn {like_op}")
+                        sub_params.append(word_pat)
+                        if desc_type == 'fsn':
+                            sub_fields.append(f"display_name {like_op}")
+                            sub_params.append(word_pat)
+
+                    # Synonyms / PT
+                    if desc_type in ('all', 'synonym'):
+                        sub_fields.append(f"display_name {like_op}")
+                        sub_params.append(word_pat)
+                        sub_fields.append(f"snomed_preferred_term {like_op}")
+                        sub_params.append(word_pat)
+                        sub_fields.append(f"synonym {like_op}")
+                        sub_params.append(word_pat)
+                        sub_fields.append(f"snomed_all_synonyms {like_op}")
+                        sub_params.append(word_pat)
+                        
+                        if lang_refset != 'en':
+                            sub_fields.append(f"""COALESCE(snomed_concept_id, sapdt_concept_id) IN (
+                                SELECT concept_id FROM ku_synonym_text WHERE ku_synonym_text {like_op}
+                            )""")
+                            sub_params.append(word_pat)
+
+                    if sub_fields:
+                        where_clauses.append("(" + " OR ".join(sub_fields) + ")")
+                        sql_params.extend(sub_params)
 
         # Multi-select Semantic Types filter
         if stypes and len(stypes) > 0 and stypes[0] != '':
@@ -712,7 +911,6 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
 
         if q:
             base_where = ["(in_sapdt = 'Yes' OR in_vsct = 'Yes')"]
-            # CONFLICT-01 FIX: same OR-based active logic for semantic counts
             if status_mode == 'active':
                 base_where.append("((in_sapdt = 'Yes' AND sapdt_status = 'Active') OR (in_vsct = 'Yes' AND snomed_active = 'Yes'))")
             
@@ -806,7 +1004,6 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             ct = cursor.fetchone()
             term_str = ct['term'] if ct else cid
             stype = ct['semantic_type'] if ct else ''
-            # VSCT extension IDs always contain the extension namespace '1000009'
             is_vsct = 'Yes' if '1000009' in str(cid) else 'No'
             return {
                 'display_name': term_str,
@@ -888,7 +1085,6 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
         conn.close()
 
         # SCT-01 FIX: Build structured descriptions list (FSN / Preferred / Synonym / ku)
-        # Follows SNOMED CT Browser description display standard
         descriptions = []
 
         # 1. FSN — Fully Specified Name
@@ -911,7 +1107,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                     descriptions.append({'type': 'Synonym', 'lang': 'en', 'text': s})
                     seen_texts.add(s)
 
-        # 4. ku custom synonyms — query ku_synonym_text table (processed first so ku badge is given priority)
+        # 4. ku custom synonyms — query ku_synonym_text table
         ku_entries = []
         try:
             cursor2 = get_db().cursor()
@@ -927,7 +1123,7 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
                     seen_texts.add(text)
                     ku_entries.append(text)
         except Exception:
-            pass  # table not yet created — skip silently
+            pass
 
         # 5. SA-PDT synonyms (pipe-separated field: synonym)
         for r in master_rows:
@@ -956,18 +1152,23 @@ class TerminologyHandler(http.server.SimpleHTTPRequestHandler):
             'in_vsct': main_row.get('in_vsct'),
             'in_sct_inter': main_row.get('in_sct_inter'),
             'master_rows': master_rows,
-            'descriptions': descriptions,      # SCT-01: structured list
-            'synonyms': synonyms_flat,         # legacy flat list
+            'descriptions': descriptions,
+            'synonyms': synonyms_flat,
             'parents': parents,
             'children': children,
-            'children_total_count': children_total_count,   # CONFLICT-03
+            'children_total_count': children_total_count,
             'attributes': attributes
         })
 
 def run():
     if not os.path.exists(DB_FILE):
+        rel_dbs = sorted(glob.glob(os.path.join(RELEASES_DIR, '*.db'))) if os.path.exists(RELEASES_DIR) else []
         gz_file = DB_FILE + '.gz'
-        if not os.path.exists(gz_file):
+        if rel_dbs:
+            latest_rel = rel_dbs[-1]
+            print(f"[INFO] Copying latest release database: {latest_rel} -> {DB_FILE} ...")
+            shutil.copy2(latest_rel, DB_FILE)
+        elif not os.path.exists(gz_file):
             db_url = os.environ.get(
                 "DB_DOWNLOAD_URL",
                 "https://github.com/imnipon/kahis-terminology/releases/download/v1.0/terminology_search.db.gz"
@@ -1002,7 +1203,7 @@ def run():
     print(f"Running at : http://localhost:{PORT}")
     print(f"App Dir    : {APP_DIR}")
     print(f"Database   : {DB_FILE}")
-    print(f"Sources    : {versions['sapdt']} | {versions['vsct']} | {versions['sct']}")
+    print(f"Sources    : {versions['sapdt']} | {versions['vsct']} | {versions['sct']} | {versions.get('ku', '')}")
     print("==================================================")
     try:
         httpd.serve_forever()

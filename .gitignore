@@ -2,12 +2,22 @@
 # KAHIS Terminology App — .gitignore
 # ============================================================
 
-# ----- Database files (ignore 200MB raw .db, allow compressed .db.gz < 100MB) -----
+# ----- Database files (exclude all .db and .db.gz from GitHub) -----
 *.db
+*.db.gz
 *.db.building
+releases/*.db
+releases/*.db.gz
 
-# ----- Backup files (ignore raw .db backups, allow compressed .db.gz backups) -----
+# ----- Raw Source Files (exclude large RF2/SA-PDT sources, track 4_KU-Custom) -----
+sources/1_SA-PDT/
+sources/2_VSCT/
+sources/3_SCT-Int/
+
+# ----- Backup & Archive binary files -----------------------
 backup/*.db
+backup/*.db.gz
+archive/backup/
 
 # ----- macOS system files ----------------------------------
 .DS_Store

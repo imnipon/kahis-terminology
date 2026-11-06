@@ -3,722 +3,1231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KAHIS Terminology — Admin Panel</title>
-    <meta name="description" content="Admin panel for KAHIS Terminology System — manage database, export data, and configure ku synonyms.">
+    <title>KAHIS Terminology — Admin Studio & DB Builder</title>
+    <meta name="description" content="KAHIS Terminology System — Clean Earth Tone Admin Studio for database building, version management, and synonym curation.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Firebase SDK (Compat) for Cloud Firestore Pending Synonym Review -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <style>
-        /* ===== CSS Reset & Variables ===== */
+        /* ===== CSS Reset & Clean Earth Tone Paper System ===== */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg:          #0f1117;
-            --bg2:         #161b27;
-            --bg3:         #1e2536;
-            --border:      #2a3352;
-            --accent:      #4f7ef8;
-            --accent-glow: rgba(79,126,248,0.18);
-            --green:       #22c55e;
-            --green-bg:    rgba(34,197,94,0.12);
-            --yellow:      #eab308;
-            --yellow-bg:   rgba(234,179,8,0.12);
-            --red:         #ef4444;
-            --red-bg:      rgba(239,68,68,0.12);
-            --teal:        #14b8a6;
-            --teal-bg:     rgba(20,184,166,0.12);
-            --text:        #e2e8f0;
-            --text2:       #94a3b8;
-            --text3:       #64748b;
-            --radius:      10px;
-            --shadow:      0 4px 24px rgba(0,0,0,0.4);
+            /* Warm Earth Tone / Paper Palette */
+            --bg-paper:         #f6f4ef;
+            --bg-canvas:        #f3efe6;
+            --surface:          #ffffff;
+            --surface-subtle:   #faf8f4;
+            --surface-hover:    #f5f1e8;
+            --border-subtle:    #ebe5da;
+            --border-strong:    #ded6c7;
+            
+            /* Text Shades */
+            --text-heading:     #231f1b;
+            --text-body:        #453f38;
+            --text-muted:       #7a7266;
+            --text-faint:       #a39b8e;
+
+            /* Elegant Earth Tone Accent Highlights */
+            --terracotta:       #b84a39;
+            --terracotta-bg:    #faece8;
+            --terracotta-border:#f3cfc6;
+
+            --sage:             #2a6f4e;
+            --sage-bg:          #eaf4ee;
+            --sage-border:      #cae5d3;
+
+            --amber:            #b87414;
+            --amber-bg:         #fdf5e6;
+            --amber-border:     #fae2b8;
+
+            --clay-blue:        #2b5278;
+            --clay-blue-bg:     #edf4fa;
+            --clay-blue-border: #d0e2f2;
+
+            --charcoal:         #2a2723;
+            --charcoal-hover:   #171513;
+
+            --sand:             #8c7355;
+            --sand-bg:          #f7f2ea;
+            --sand-border:      #e5dbc9;
+
+            --plum:             #6d3b71;
+            --plum-bg:          #f6ecf7;
+            --plum-border:      #e6cee8;
+
+            /* Shadows & Elevation */
+            --shadow-soft:      0 2px 10px rgba(60, 48, 30, 0.04), 0 1px 3px rgba(60, 48, 30, 0.03);
+            --shadow-hover:     0 8px 24px rgba(60, 48, 30, 0.07), 0 2px 6px rgba(60, 48, 30, 0.04);
+            --radius-card:      18px;
+            --radius-pill:      9999px;
+            --radius-sm:        10px;
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
+            font-family: 'Plus Jakarta Sans', 'Sarabun', system-ui, -apple-system, sans-serif;
+            background: var(--bg-paper);
+            color: var(--text-body);
+            font-size: 14.5px;
             min-height: 100vh;
-            overflow-x: hidden;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* ===== PIN MODAL ===== */
-        #pin-overlay {
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(12px);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 1000;
-            transition: opacity 0.3s;
-        }
-        #pin-overlay.hidden { opacity: 0; pointer-events: none; }
-
-        .pin-card {
-            background: var(--bg2);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 40px 36px;
-            width: 340px;
-            text-align: center;
-            box-shadow: var(--shadow);
-            animation: slideUp 0.4s cubic-bezier(0.34,1.56,0.64,1);
-        }
-        @keyframes slideUp {
-            from { transform: translateY(30px); opacity: 0; }
-            to   { transform: translateY(0);    opacity: 1; }
+        /* ===== MAIN APP WRAPPER ===== */
+        #app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
 
-        .pin-icon { font-size: 40px; margin-bottom: 12px; }
-        .pin-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-        .pin-sub   { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
-
-        .pin-dots {
-            display: flex; justify-content: center; gap: 10px;
-            margin-bottom: 20px;
-        }
-        .pin-dot {
-            width: 14px; height: 14px;
-            border-radius: 50%;
-            border: 2px solid var(--border);
-            background: transparent;
-            transition: all 0.15s;
-        }
-        .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
-
-        .pin-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr);
-            gap: 8px; margin-bottom: 12px;
-        }
-        .pin-btn {
-            background: var(--bg3);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 18px;
-            font-weight: 600;
-            padding: 14px;
-            cursor: pointer;
-            transition: background 0.15s, transform 0.1s;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .pin-btn:hover  { background: var(--accent-glow); border-color: var(--accent); }
-        .pin-btn:active { transform: scale(0.93); }
-
-        .pin-error {
-            font-size: 12px; color: var(--red);
-            height: 18px; margin-top: 8px;
-            transition: opacity 0.2s;
-        }
-
-        /* ===== MAIN LAYOUT ===== */
-        #app { display: none; min-height: 100vh; }
-        #app.visible { display: flex; flex-direction: column; }
-
-        /* ===== TOPBAR ===== */
+        /* ===== TOPBAR (Clean Paper Header) ===== */
         .topbar {
-            background: var(--bg2);
-            border-bottom: 1px solid var(--border);
-            padding: 0 28px;
-            height: 58px;
-            display: flex; align-items: center; gap: 12px;
-            position: sticky; top: 0; z-index: 100;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 0 32px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
+
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .topbar-logo-img {
+            height: 38px;
+            width: auto;
+            max-width: 44px;
+            object-fit: contain;
+            vertical-align: middle;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            background: #ffffff;
+            padding: 2px;
+            border: 1px solid var(--border-subtle);
+        }
+
         .topbar-logo {
-            font-size: 14px; font-weight: 700;
-            color: var(--accent);
-            letter-spacing: 0.5px;
+            font-size: 18.5px;
+            font-weight: 800;
+            color: var(--text-heading);
+            letter-spacing: -0.3px;
         }
+
         .topbar-sub {
-            font-size: 11px; color: var(--text3);
-            background: var(--bg3);
-            padding: 2px 8px; border-radius: 4px;
-            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-muted);
+            background: var(--surface-subtle);
+            border: 1px solid var(--border-subtle);
+            padding: 3px 10px;
+            border-radius: var(--radius-pill);
+            font-weight: 500;
         }
+
         .app-ver-badge {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 10px;
-            background: rgba(99, 102, 241, 0.2);
-            color: #a5b4fc;
-            border: 1px solid rgba(165, 180, 252, 0.3);
-            margin-left: 6px;
+            padding: 2px 9px;
+            border-radius: var(--radius-pill);
+            background: var(--clay-blue-bg);
+            color: var(--clay-blue);
+            border: 1px solid var(--clay-blue-border);
             font-family: 'JetBrains Mono', monospace;
         }
-        .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+        .topbar-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
         .btn-launch {
-            background: var(--accent);
-            color: #fff;
+            background: var(--charcoal);
+            color: #ffffff;
             border: none;
-            border-radius: 7px;
-            padding: 7px 16px;
-            font-size: 13px;
+            border-radius: var(--radius-pill);
+            padding: 9px 20px;
+            font-size: 13.5px;
             font-weight: 600;
             cursor: pointer;
-            display: flex; align-items: center; gap: 6px;
-            transition: opacity 0.15s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(42, 39, 35, 0.2);
+            transition: all 0.18s ease;
         }
-        .btn-launch:hover  { opacity: 0.88; }
-        .btn-launch:active { transform: scale(0.97); }
 
-        .btn-lock {
+        .btn-launch:hover {
+            background: var(--charcoal-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(42, 39, 35, 0.25);
+        }
+
+        .btn-revert-dark {
             background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 7px;
-            color: var(--text2);
-            padding: 6px 12px;
-            font-size: 12px;
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill);
+            padding: 8px 16px;
+            font-size: 12.5px;
+            font-weight: 500;
             cursor: pointer;
-            transition: color 0.15s, border-color 0.15s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
         }
-        .btn-lock:hover { color: var(--red); border-color: var(--red); }
 
-        /* ===== MAIN CONTENT ===== */
-        .main { padding: 28px; max-width: 1100px; margin: 0 auto; width: 100%; }
+        .btn-revert-dark:hover {
+            background: #ffffff;
+            color: var(--text-heading);
+            border-color: var(--border-strong);
+        }
 
-        /* ===== SECTION TITLE ===== */
+        /* ===== MAIN CONTAINER ===== */
+        .main {
+            padding: 32px;
+            max-width: 1280px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* ===== SECTION HEADER ===== */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 36px;
+            margin-bottom: 16px;
+        }
+
+        .section-header:first-child {
+            margin-top: 0;
+        }
+
         .section-title {
-            font-size: 12px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1.2px; color: var(--text3);
-            margin-bottom: 14px; margin-top: 28px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-heading);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.1px;
         }
-        .section-title:first-child { margin-top: 0; }
 
-        /* ===== SOURCE STATUS CARDS ===== */
+        .section-title-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: var(--sand-bg);
+            color: var(--sand);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+        }
+
+        .btn-refresh-stats {
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 14px;
+            background: #ffffff;
+            color: var(--text-body);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .btn-refresh-stats:hover {
+            background: var(--surface-subtle);
+            border-color: var(--border-strong);
+            color: var(--text-heading);
+        }
+
+        /* ===== 1. SOURCE STATUS CARDS ===== */
         .source-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 14px;
+            gap: 16px;
         }
+
         .source-card {
-            background: var(--bg2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 16px 18px;
-            display: flex; align-items: center; gap: 14px;
-        }
-        .source-dot {
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        .dot-green  { background: var(--green);  box-shadow: 0 0 8px var(--green); }
-        .dot-yellow { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
-        .dot-red    { background: var(--red);    box-shadow: 0 0 8px var(--red); }
-
-        .source-label { font-size: 13px; font-weight: 600; }
-        .source-version {
-            font-size: 11px; color: var(--text2);
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .source-right { margin-left: auto; font-size: 11px; color: var(--text3); }
-
-        /* ===== STATS DASHBOARD ===== */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 12px;
-        }
-        .stat-card {
-            background: var(--bg2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 12px 10px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 18px 20px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 88px;
-        }
-        .stat-value {
-            font-size: clamp(14px, 1.7vw, 24px); font-weight: 700;
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--accent);
-            line-height: 1.1;
-            white-space: nowrap;
+            gap: 10px;
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+            position: relative;
             overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
         }
-        .stat-label { font-size: 11px; color: var(--text2); margin-top: 4px; }
-        .stat-card.green .stat-value { color: var(--green); }
-        .stat-card.yellow .stat-value { color: var(--yellow); }
-        .stat-card.red .stat-value { color: var(--red); }
-        .stat-card.teal .stat-value { color: var(--teal); }
+
+        .source-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .source-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .source-card-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .source-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--sage);
+            box-shadow: 0 0 0 3px var(--sage-bg);
+        }
+
+        .source-label {
+            font-size: 14.5px;
+            font-weight: 700;
+            color: var(--text-heading);
+        }
+
+        .source-status-badge {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            background: var(--sage-bg);
+            color: var(--sage);
+            border: 1px solid var(--sage-border);
+        }
+
+        .source-version-wrap {
+            background: var(--surface-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 9px 13px;
+            font-size: 12.5px;
+            color: var(--text-body);
+            font-family: 'JetBrains Mono', monospace;
+            word-break: break-all;
+            line-height: 1.45;
+        }
+
+        /* ===== 2. PRIMARY METRICS DASHBOARD (Thoughtful Asymmetric Layout) ===== */
+        .stats-grid-primary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 18px 16px;
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 112px;
+            position: relative;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .stat-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
 
         .stat-badge-row {
             display: flex;
-            gap: 3px;
-            justify-content: center;
-            margin-bottom: 5px;
+            gap: 4px;
             flex-wrap: wrap;
         }
+
         .stat-badge {
-            font-size: 8px;
+            font-size: 10px;
             font-weight: 700;
-            padding: 1px 4px;
-            border-radius: 3px;
+            padding: 3px 7px;
+            border-radius: 4px;
             letter-spacing: 0.3px;
             text-transform: uppercase;
         }
-        .badge-tag-sapdt     { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
-        .badge-tag-vsct      { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
-        .badge-tag-vsct-only { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-        .badge-tag-sct       { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
-        .badge-tag-ku        { background: #ccfbf1; color: #115e59; border: 1px solid #99f6e4; }
-        .badge-tag-sys       { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
 
-        /* ===== ACTION CARDS ===== */
+        .badge-tag-sapdt     { background: #eef4ff; color: #2563eb; border: 1px solid #dbeafe; }
+        .badge-tag-vsct      { background: #eafaf1; color: #16a34a; border: 1px solid #d1fae5; }
+        .badge-tag-vsct-only { background: #fef8ee; color: #d97706; border: 1px solid #fde68a; }
+        .badge-tag-sct       { background: #f4f6f8; color: #475569; border: 1px solid #e2e8f0; }
+        .badge-tag-ku        { background: #fdf5e6; color: #b45309; border: 1px solid #fde68a; }
+        .badge-tag-sys       { background: #f6ecf7; color: #7e22ce; border: 1px solid #f3e8ff; }
+
+        /* Highlight Colors for Numbers */
+        .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+            margin-bottom: 4px;
+            word-break: normal;
+            white-space: nowrap;
+        }
+
+        .val-total        { color: #1e293b; }
+        .val-active       { color: #166534; }
+        .val-inactive     { color: #b91c1c; }
+        .val-ku           { color: #b45309; }
+        .val-sapdt-vsct   { color: #334155; }
+        .val-vsct-only    { color: #c2410c; }
+        .val-sct-terms    { color: #0369a1; }
+        .val-sct-rels     { color: #1d4ed8; }
+        .val-db-size      { color: #15803d; }
+        .val-gz-size      { color: #0f766e; }
+        .val-backups      { color: #7e22ce; }
+        .val-time         { color: #475569; font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace; line-height: 1.35; white-space: normal; }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+            line-height: 1.3;
+        }
+
+        /* ===== 2.5 SEMANTIC TYPE PILLS GRID ===== */
+        .semantic-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+        }
+
+        .sem-card {
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 14px 12px;
+            text-align: center;
+            box-shadow: var(--shadow-soft);
+            transition: all 0.15s ease;
+        }
+
+        .sem-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .sem-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-heading);
+            letter-spacing: -0.3px;
+            margin-bottom: 3px;
+        }
+
+        .sem-label {
+            font-size: 12.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        /* ===== 3. ACTION CARDS (Tactile & Clean) ===== */
         .action-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 14px;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
         }
+
         .action-card {
-            background: var(--bg2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 22px;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: box-shadow 0.18s ease;
         }
+
+        .action-card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
         .action-card-header {
-            display: flex; align-items: center; gap: 10px;
-            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
         }
-        .action-icon { font-size: 22px; }
-        .action-title { font-size: 14px; font-weight: 700; }
-        .action-desc  { font-size: 12px; color: var(--text2); margin-bottom: 14px; line-height: 1.5; }
+
+        .action-icon {
+            font-size: 23px;
+        }
+
+        .action-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-heading);
+            letter-spacing: -0.2px;
+        }
+
+        .action-desc {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            margin-bottom: 18px;
+            line-height: 1.55;
+            flex-grow: 1;
+        }
+
+        .action-desc code {
+            background: var(--surface-subtle);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-body);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
 
         .btn-action {
             width: 100%;
-            padding: 10px 16px;
-            border-radius: 7px;
-            font-size: 13px;
+            padding: 11px 18px;
+            border-radius: var(--radius-pill);
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            border: none;
-            transition: opacity 0.15s, transform 0.1s;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
+            border: 1px solid transparent;
+            transition: all 0.18s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
+
         .btn-action:active { transform: scale(0.98); }
-        .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-action:disabled { opacity: 0.55; cursor: not-allowed; }
 
-        .btn-blue   { background: var(--accent);  color: #fff; }
-        .btn-green  { background: var(--green);   color: #fff; }
-        .btn-teal   { background: var(--teal);    color: #fff; }
-        .btn-red    { background: var(--red);      color: #fff; }
-        .btn-blue:hover  { opacity: 0.88; }
-        .btn-green:hover { opacity: 0.88; }
-        .btn-teal:hover  { opacity: 0.88; }
-        .btn-red:hover   { opacity: 0.88; }
+        .btn-warm-dark {
+            background: var(--charcoal);
+            color: #ffffff;
+        }
+        .btn-warm-dark:hover { background: var(--charcoal-hover); }
 
-        /* ===== LOG / PROGRESS ===== */
-        .log-area {
-            background: var(--bg);
-            border: 1px solid var(--border);
+        .btn-terracotta {
+            background: var(--terracotta);
+            color: #ffffff;
+        }
+        .btn-terracotta:hover { background: #a23f2f; }
+
+        .btn-sage {
+            background: var(--sage);
+            color: #ffffff;
+        }
+        .btn-sage:hover { background: #225a3f; }
+
+        .btn-clay {
+            background: var(--clay-blue);
+            color: #ffffff;
+        }
+        .btn-clay:hover { background: #21415f; }
+
+        .btn-amber {
+            background: var(--amber);
+            color: #ffffff;
+        }
+        .btn-amber:hover { background: #9c6110; }
+
+        /* File Upload Row */
+        .file-upload-wrap {
+            margin-bottom: 12px;
+        }
+
+        .file-upload-input {
+            width: 100%;
+            font-size: 13px;
+            padding: 8px 12px;
+            border: 1px solid var(--border-subtle);
             border-radius: 8px;
-            padding: 12px 14px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            color: var(--text2);
-            min-height: 52px;
-            max-height: 180px;
-            overflow-y: auto;
-            margin-top: 12px;
-            white-space: pre-wrap;
-            line-height: 1.6;
+            background: var(--surface-subtle);
+            color: var(--text-body);
+            cursor: pointer;
         }
-        .log-line-ok   { color: var(--green); }
-        .log-line-err  { color: var(--red);   }
-        .log-line-warn { color: var(--yellow); }
-        .log-line-info { color: var(--accent); }
 
-        /* ===== PROGRESS BAR ===== */
-        .progress-wrap {
-            height: 4px;
-            background: var(--border);
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 10px;
+        /* ===== LOG & CONSOLE AREA ===== */
+        .log-area {
+            background: #1e1b18;
+            color: #d8d2c6;
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            min-height: 60px;
+            max-height: 220px;
+            overflow-y: auto;
+            margin-top: 14px;
+            white-space: pre-wrap;
+            line-height: 1.65;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.2);
         }
+
+        .log-line-ok   { color: #4ade80; }
+        .log-line-err  { color: #f87171; }
+        .log-line-warn { color: #fbbf24; }
+        .log-line-info { color: #60a5fa; }
+
+        .progress-wrap {
+            height: 5px;
+            background: var(--border-subtle);
+            border-radius: var(--radius-pill);
+            overflow: hidden;
+            margin-top: 12px;
+        }
+
         .progress-bar {
-            height: 100%; width: 0%;
-            background: linear-gradient(90deg, var(--accent), var(--teal));
-            border-radius: 2px;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--terracotta), var(--amber));
+            border-radius: var(--radius-pill);
             transition: width 0.3s;
         }
+
         .progress-bar.indeterminate {
             width: 40%;
             animation: slide 1.2s infinite linear;
         }
+
         @keyframes slide {
             0%   { transform: translateX(-100%); }
             100% { transform: translateX(350%); }
         }
 
-        /* ===== KU SYNONYM SECTION ===== */
-        .ku-row {
-            display: flex; gap: 10px; margin-bottom: 12px;
+        /* ===== 4. FIRESTORE PENDING QUEUE ===== */
+        .queue-container {
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 24px;
         }
+
+        .queue-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            background: var(--surface-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            gap: 16px;
+            flex-wrap: wrap;
+            transition: background 0.15s ease;
+        }
+
+        .queue-item:hover {
+            background: #ffffff;
+            border-color: var(--border-strong);
+        }
+
+        .btn-pill-sm {
+            padding: 7px 14px;
+            border-radius: var(--radius-pill);
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-pill-sm:active { transform: scale(0.96); }
+
+        /* ===== 5. DIRECT KU SYNONYM MANAGER ===== */
+        .ku-manager-card {
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .ku-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
         .ku-input {
             flex: 1;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 7px;
-            color: var(--text);
-            font-size: 13px;
-            padding: 9px 12px;
-            font-family: 'Inter', sans-serif;
+            background: var(--surface-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill);
+            color: var(--text-heading);
+            font-size: 14px;
+            padding: 10px 18px;
+            font-family: inherit;
             outline: none;
-            transition: border-color 0.15s;
+            transition: all 0.15s ease;
         }
-        .ku-input:focus { border-color: var(--accent); }
-        .ku-input::placeholder { color: var(--text3); }
 
-        .btn-sm {
-            padding: 8px 14px;
-            border-radius: 7px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            white-space: nowrap;
-            transition: opacity 0.15s;
+        .ku-input:focus {
+            background: #ffffff;
+            border-color: var(--charcoal);
+            box-shadow: 0 0 0 3px rgba(42, 39, 35, 0.08);
         }
-        .btn-sm:hover { opacity: 0.88; }
+
+        .ku-input::placeholder { color: var(--text-faint); }
 
         .ku-tag-list {
-            display: flex; flex-wrap: wrap; gap: 6px;
-            min-height: 32px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 36px;
+            align-items: center;
         }
+
         .ku-tag {
-            display: inline-flex; align-items: center; gap: 5px;
-            background: var(--teal-bg);
-            border: 1px solid var(--teal);
-            border-radius: 20px;
-            padding: 3px 10px 3px 10px;
-            font-size: 12px;
-            color: var(--teal);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--amber-bg);
+            border: 1px solid var(--amber-border);
+            border-radius: var(--radius-pill);
+            padding: 4px 12px;
+            font-size: 13px;
+            color: var(--amber);
+            font-weight: 600;
         }
+
         .ku-tag-del {
-            background: none; border: none;
-            color: var(--text3);
-            cursor: pointer; font-size: 14px;
-            line-height: 1; padding: 0 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0 2px;
             transition: color 0.15s;
         }
-        .ku-tag-del:hover { color: var(--red); }
 
-        /* ===== RESPONSIVE ===== */
-        @media (max-width: 640px) {
-            .main { padding: 16px; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-        }
+        .ku-tag-del:hover { color: var(--terracotta); }
 
-        /* ===== TOAST ===== */
+        /* ===== TOAST NOTIFICATION ===== */
         #toast {
-            position: fixed; bottom: 24px; right: 24px;
-            background: var(--bg2);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px 18px;
-            font-size: 13px;
-            box-shadow: var(--shadow);
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: var(--charcoal);
+            color: #ffffff;
+            border-radius: var(--radius-pill);
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
             z-index: 500;
             transform: translateY(60px);
             opacity: 0;
-            transition: transform 0.3s, opacity 0.3s;
-            max-width: 320px;
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s;
+            max-width: 360px;
         }
+
         #toast.show { transform: translateY(0); opacity: 1; }
-        #toast.ok  { border-color: var(--green); color: var(--green); }
-        #toast.err { border-color: var(--red);   color: var(--red); }
+        #toast.ok   { background: #166534; }
+        #toast.err  { background: #991b1b; }
+
+        /* Responsive Layout */
+        @media (max-width: 768px) {
+            .topbar { padding: 0 16px; }
+            .main { padding: 18px; }
+            .stats-grid-primary { grid-template-columns: repeat(2, 1fr); }
+            .action-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 
-<!-- ===== PIN OVERLAY (Disabled in v6.0 Internal Admin Builder Mode) ===== -->
-<div id="pin-overlay" class="hidden" style="display:none">
-</div>
-
-<!-- ===== TOAST ===== -->
 <div id="toast"></div>
 
-<!-- ===== MAIN APP ===== -->
-<div id="app" class="visible">
+<div id="app">
 
-    <!-- Topbar -->
-    <div class="topbar">
-        <span class="topbar-logo">KAHIS Terminology</span>
-        <span class="topbar-sub">Admin DB Builder & Panel</span>
-        <span class="app-ver-badge">v6.0</span>
+    <!-- Topbar (Paper Aesthetic) -->
+    <header class="topbar">
+        <div class="topbar-brand">
+            <img src="images/KAHIS_LOGO.png" alt="KAHIS Logo" class="topbar-logo-img" onerror="if(!this.dataset.retry){this.dataset.retry='1';this.src='/images/KAHIS_LOGO.png';}">
+            <span class="topbar-logo">KAHIS Terminology</span>
+            <span class="topbar-sub">Admin Studio & DB Builder</span>
+            <span class="app-ver-badge">v7.0</span>
+        </div>
         <div class="topbar-right">
+            <a href="admin_backup_dark.html" class="btn-revert-dark" title="สลับกลับไปดูหน้า Admin แบบ Dark Theme เดิมได้ตลอดเวลา">
+                🌙 โหมด Dark Theme
+            </a>
             <button class="btn-launch" id="btn-open-app" onclick="window.open('index.html','_blank')">
-                🚀 เปิดหน้าทดสอบ Browser (User App)
+                <span>🚀 เปิดหน้าทดสอบ Browser (User App)</span>
             </button>
         </div>
-    </div>
+    </header>
 
-    <div class="main">
+    <main class="main">
 
-        <!-- 1. SOURCE STATUS -->
-        <div class="section-title">📡 แหล่งข้อมูล (Data Sources)</div>
+        <!-- 1. SOURCE STATUS CARDS -->
+        <div class="section-header">
+            <div class="section-title">
+                <span class="section-title-icon">📡</span>
+                <span>แหล่งข้อมูลในโฟลเดอร์ sources/ (Data Sources & Versions)</span>
+            </div>
+        </div>
+
         <div class="source-grid" id="source-grid">
             <div class="source-card">
-                <div class="source-dot dot-yellow"></div>
-                <div>
-                    <div class="source-label">SA-PDT</div>
-                    <div class="source-version" id="ver-sapdt">กำลังตรวจสอบ…</div>
+                <div class="source-card-header">
+                    <div class="source-card-title-group">
+                        <div class="source-dot"></div>
+                        <span class="source-label">1. SA-PDT</span>
+                    </div>
+                    <span class="source-status-badge" id="sapdt-status">กำลังตรวจสอบ…</span>
                 </div>
-                <div class="source-right" id="sapdt-status">–</div>
+                <div class="source-version-wrap" id="ver-sapdt">กำลังตรวจสอบ…</div>
             </div>
+
             <div class="source-card">
-                <div class="source-dot dot-green"></div>
-                <div>
-                    <div class="source-label">VSCT (VETExtension)</div>
-                    <div class="source-version" id="ver-vsct">กำลังตรวจสอบ…</div>
+                <div class="source-card-header">
+                    <div class="source-card-title-group">
+                        <div class="source-dot"></div>
+                        <span class="source-label">2. VSCT (VETExtension)</span>
+                    </div>
+                    <span class="source-status-badge" id="vsct-status">กำลังตรวจสอบ…</span>
                 </div>
-                <div class="source-right" id="vsct-status">–</div>
+                <div class="source-version-wrap" id="ver-vsct">กำลังตรวจสอบ…</div>
             </div>
+
             <div class="source-card">
-                <div class="source-dot dot-green"></div>
-                <div>
-                    <div class="source-label">SCT International RF2</div>
-                    <div class="source-version" id="ver-sct">กำลังตรวจสอบ…</div>
+                <div class="source-card-header">
+                    <div class="source-card-title-group">
+                        <div class="source-dot"></div>
+                        <span class="source-label">3. SCT-Int (International)</span>
+                    </div>
+                    <span class="source-status-badge" id="sct-status">กำลังตรวจสอบ…</span>
                 </div>
-                <div class="source-right" id="sct-status">–</div>
+                <div class="source-version-wrap" id="ver-sct">กำลังตรวจสอบ…</div>
+            </div>
+
+            <div class="source-card">
+                <div class="source-card-header">
+                    <div class="source-card-title-group">
+                        <div class="source-dot"></div>
+                        <span class="source-label">4. KU Custom</span>
+                    </div>
+                    <span class="source-status-badge" id="ku-status">กำลังตรวจสอบ…</span>
+                </div>
+                <div class="source-version-wrap" id="ver-ku">กำลังตรวจสอบ…</div>
             </div>
         </div>
 
-        <!-- 2. STATISTICS -->
-        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>📊 สถิติฐานข้อมูลปัจจุบัน</span>
-            <button onclick="loadStats()" style="font-size:12px; padding:4px 10px; background:var(--accent); color:#fff; border:none; border-radius:4px; cursor:pointer;">
-                🔄 รีเฟรชสถิติ
+        <!-- 2. PRIMARY STATISTICS (Distinct Earth Tone Highlights) -->
+        <div class="section-header">
+            <div class="section-title">
+                <span class="section-title-icon">📊</span>
+                <span>สถิติฐานข้อมูลปัจจุบัน (Database Metrics)</span>
+            </div>
+            <button class="btn-refresh-stats" onclick="loadStats()">
+                <span>🔄 รีเฟรชสถิติ</span>
             </button>
         </div>
-        <div class="stats-grid">
+
+        <div class="stats-grid-primary">
+            <!-- 1. Total Concepts -->
             <div class="stat-card">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
-                    <span class="stat-badge badge-tag-vsct">VSCT</span>
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
+                        <span class="stat-badge badge-tag-vsct">VSCT</span>
+                    </div>
                 </div>
-                <div class="stat-value" id="stat-total">–</div>
-                <div class="stat-label">Concepts สัตวแพทย์</div>
-            </div>
-            <div class="stat-card green">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
-                    <span class="stat-badge badge-tag-vsct">VSCT</span>
+                <div>
+                    <div class="stat-value val-total" id="stat-total">–</div>
+                    <div class="stat-label">Concepts สัตวแพทย์ทั้งหมด</div>
                 </div>
-                <div class="stat-value" id="stat-active">–</div>
-                <div class="stat-label">Active</div>
             </div>
-            <div class="stat-card red">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
-                    <span class="stat-badge badge-tag-vsct">VSCT</span>
+
+            <!-- 2. Active -->
+            <div class="stat-card" style="background:#fafffa;">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-vsct">ACTIVE STATUS</span>
+                    </div>
                 </div>
-                <div class="stat-value" id="stat-inactive">–</div>
-                <div class="stat-label">Inactive / Retired</div>
-            </div>
-            <div class="stat-card teal">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-ku">KU SYNONYM</span>
+                <div>
+                    <div class="stat-value val-active" id="stat-active">–</div>
+                    <div class="stat-label">Active (ใช้งานได้ทันที)</div>
                 </div>
-                <div class="stat-value" id="stat-ku">–</div>
-                <div class="stat-label">ku Synonyms ภาษาไทย</div>
             </div>
+
+            <!-- 3. Inactive / Retired -->
+            <div class="stat-card" style="background:#fffafa;">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge" style="background:#fee2e2; color:#991b1b;">RETIRED</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-value val-inactive" id="stat-inactive">–</div>
+                    <div class="stat-label">Inactive / มีรหัสทดแทน</div>
+                </div>
+            </div>
+
+            <!-- 4. KU Synonyms -->
+            <div class="stat-card" style="background:#fffdfa;">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-ku">KU SYNONYMS</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-value val-ku" id="stat-ku">–</div>
+                    <div class="stat-label">คำพ้องภาษาไทย/คลินิก มก.</div>
+                </div>
+            </div>
+
+            <!-- 5. SA-PDT + VSCT -->
             <div class="stat-card">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
-                    <span class="stat-badge badge-tag-vsct">VSCT</span>
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
+                        <span class="stat-badge badge-tag-vsct">VSCT</span>
+                    </div>
                 </div>
-                <div class="stat-value" id="stat-sapdt-vsct">–</div>
-                <div class="stat-label">SA-PDT + VSCT</div>
-            </div>
-            <div class="stat-card yellow">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-vsct-only">VSCT ONLY</span>
+                <div>
+                    <div class="stat-value val-sapdt-vsct" id="stat-sapdt-vsct">–</div>
+                    <div class="stat-label">มีทั้งใน SA-PDT และ VSCT</div>
                 </div>
-                <div class="stat-value" id="stat-vsct-only">–</div>
-                <div class="stat-label">VSCT เท่านั้น</div>
             </div>
+
+            <!-- 6. VSCT Only -->
             <div class="stat-card">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sct">SCT-INTER</span>
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-vsct-only">VSCT ONLY</span>
+                    </div>
                 </div>
-                <div class="stat-value" id="stat-global-terms">–</div>
-                <div class="stat-label">SNOMED CT Inter Terms</div>
+                <div>
+                    <div class="stat-value val-vsct-only" id="stat-vsct-only">–</div>
+                    <div class="stat-label">มโนทัศน์เฉพาะ VSCT</div>
+                </div>
             </div>
+
+            <!-- 7. SCT Inter Terms -->
             <div class="stat-card">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sct">SCT-INTER</span>
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sct">GLOBAL FSN</span>
+                    </div>
                 </div>
-                <div class="stat-value" id="stat-global-rels">–</div>
-                <div class="stat-label">Relationships ทั้งหมด</div>
-            </div>
-            <div class="stat-card green">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sys">SYSTEM DB</span>
+                <div>
+                    <div class="stat-value val-sct-terms" id="stat-global-terms">–</div>
+                    <div class="stat-label">SNOMED CT Inter Terms</div>
                 </div>
-                <div class="stat-value" id="stat-db-size">–</div>
-                <div class="stat-label">ขนาดไฟล์ SQLite DB</div>
             </div>
-            <div class="stat-card green">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sys">SYSTEM GZ</span>
-                </div>
-                <div class="stat-value" id="stat-gz-size">–</div>
-                <div class="stat-label">ขนาดไฟล์ GZ Compress</div>
-            </div>
-            <div class="stat-card teal">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sys">SYSTEM BACKUP</span>
-                </div>
-                <div class="stat-value" id="stat-backups">–</div>
-                <div class="stat-label">ไฟล์สำรอง Backup</div>
-            </div>
+
+            <!-- 8. Relationships -->
             <div class="stat-card">
-                <div class="stat-badge-row">
-                    <span class="stat-badge badge-tag-sys">SYSTEM TIME</span>
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sct">HIERARCHY</span>
+                    </div>
                 </div>
-                <div class="stat-value" id="stat-db-mtime" style="font-size:12px; font-weight:600;">–</div>
-                <div class="stat-label">แก้ไข DB ล่าสุด</div>
+                <div>
+                    <div class="stat-value val-sct-rels" id="stat-global-rels">–</div>
+                    <div class="stat-label">Relationships ทั้งหมด</div>
+                </div>
+            </div>
+
+            <!-- 9. SQLite DB Size -->
+            <div class="stat-card">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sys">SQLITE DB</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-value val-db-size" id="stat-db-size">–</div>
+                    <div class="stat-label">ขนาดไฟล์ SQLite (.db)</div>
+                </div>
+            </div>
+
+            <!-- 10. GZ Compress Size -->
+            <div class="stat-card">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sys">GZIP ARCHIVE</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-value val-gz-size" id="stat-gz-size">–</div>
+                    <div class="stat-label">ขนาดไฟล์บีบอัด (.db.gz)</div>
+                </div>
+            </div>
+
+            <!-- 11. Backup Files -->
+            <div class="stat-card">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sys">RELEASES & BACKUP</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-value val-backups" id="stat-backups">–</div>
+                    <div class="stat-label">ไฟล์ใน releases/ และสำรอง</div>
+                </div>
+            </div>
+
+            <!-- 12. Last Modified -->
+            <div class="stat-card">
+                <div class="stat-top-bar">
+                    <div class="stat-badge-row">
+                        <span class="stat-badge badge-tag-sys">MODIFIED TIME</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="stat-value val-time" id="stat-db-mtime">–</div>
+                    <div class="stat-label">แก้ไข DB ล่าสุด</div>
+                </div>
             </div>
         </div>
 
-        <!-- 2.5 SEMANTIC DISTRIBUTION -->
-        <div class="section-title" style="margin-top:20px;">🏷️ สัดส่วนหมวดหมู่มโนทัศน์ (Semantic Types)</div>
-        <div class="stats-grid" id="semantic-dist-grid">
-            <div class="stat-card"><div class="stat-value">–</div><div class="stat-label">Loading…</div></div>
+        <!-- 2.5 SEMANTIC TYPE PILLS GRID -->
+        <div class="section-header">
+            <div class="section-title">
+                <span class="section-title-icon">🏷️</span>
+                <span>สัดส่วนหมวดหมู่มโนทัศน์ (Semantic Types Distribution)</span>
+            </div>
         </div>
 
-        <!-- 3. DATABASE ACTIONS -->
-        <div class="section-title">🛠️ จัดการฐานข้อมูล</div>
+        <div class="semantic-grid" id="semantic-dist-grid">
+            <div class="sem-card"><div class="sem-value">–</div><div class="sem-label">กำลังโหลด…</div></div>
+        </div>
+
+        <!-- 3. DATABASE ACTIONS (Rebuild, Verify, Export, Import) -->
+        <div class="section-header">
+            <div class="section-title">
+                <span class="section-title-icon">🛠️</span>
+                <span>จัดการฐานข้อมูล (Database Engine Actions)</span>
+            </div>
+        </div>
+
         <div class="action-grid">
-
-            <!-- Rebuild DB -->
+            <!-- Action 1: Rebuild DB -->
             <div class="action-card">
-                <div class="action-card-header">
-                    <span class="action-icon">🔨</span>
-                    <span class="action-title">Rebuild Database</span>
+                <div>
+                    <div class="action-card-header">
+                        <span class="action-icon">🔨</span>
+                        <span class="action-title">Rebuild Database</span>
+                    </div>
+                    <div class="action-desc">
+                        ประมวลผลสร้าง <code>terminology_search.db</code> ใหม่ทั้งหมดจาก 3 แหล่งต้นฉบับใน <code>sources/</code> โดยผสานคำพ้อง KU เดิมครบถ้วน และสำเนาเก็บใน <code>releases/</code> อัตโนมัติ
+                    </div>
                 </div>
-                <div class="action-desc">
-                    สร้าง <code style="color:var(--accent)">terminology_search.db</code> ใหม่ทั้งหมดจาก 3 แหล่งต้นฉบับ
-                    (SA-PDT + VSCT + SCT International) โดยไม่แก้ไขไฟล์ต้นฉบับ
+                <div>
+                    <button class="btn-action btn-terracotta" id="btn-rebuild" onclick="runRebuild()">
+                        <span>🔨 Rebuild DB ใหม่</span>
+                    </button>
+                    <div class="progress-wrap" id="rebuild-progress-wrap" style="display:none">
+                        <div class="progress-bar indeterminate" id="rebuild-progress-bar"></div>
+                    </div>
+                    <div class="log-area" id="rebuild-log" style="display:none"></div>
                 </div>
-                <button class="btn-action btn-red" id="btn-rebuild" onclick="runRebuild()">
-                    🔨 Rebuild DB ใหม่
-                </button>
-                <div class="progress-wrap" id="rebuild-progress-wrap" style="display:none">
-                    <div class="progress-bar indeterminate" id="rebuild-progress-bar"></div>
-                </div>
-                <div class="log-area" id="rebuild-log" style="display:none"></div>
             </div>
 
-            <!-- Verify DB (QA Audit) -->
+            <!-- Action 2: Verify DB (QA Audit) -->
             <div class="action-card">
-                <div class="action-card-header">
-                    <span class="action-icon">🔍</span>
-                    <span class="action-title">Verify Database (QA Audit 34 จุด)</span>
+                <div>
+                    <div class="action-card-header">
+                        <span class="action-icon">🔍</span>
+                        <span class="action-title">Verify Database (QA Audit 35 จุด)</span>
+                    </div>
+                    <div class="action-desc">
+                        ตรวจสอบความถูกต้องครบ 5 มิติ (Schema 32 คอลัมน์, ปริมาณข้อมูล 42,347 รายการ, ความสมบูรณ์ของ Display Name/FSN, คำค้น FTS5 และลำดับสายวิวัฒนาการ)
+                    </div>
                 </div>
-                <div class="action-desc">
-                    ตรวจสอบความสมบูรณ์ของฐานข้อมูลครบ 5 มิติ (Schema 32 คอลัมน์, จำนวนข้อมูลครบ 42,299 แถว, ไม่มีฟิลด์ว่าง, กฎ Display Name/FSN และ FTS5 Search)
+                <div>
+                    <button class="btn-action btn-clay" id="btn-verify" onclick="runVerify()">
+                        <span>🔍 ตรวจสอบความถูกต้อง DB</span>
+                    </button>
+                    <div class="log-area" id="verify-log" style="display:none; max-height:260px;"></div>
                 </div>
-                <button class="btn-action btn-blue" id="btn-verify" onclick="runVerify()">
-                    🔍 ตรวจสอบความถูกต้อง DB
-                </button>
-                <div class="log-area" id="verify-log" style="display:none; max-height:260px;"></div>
             </div>
 
-            <!-- Export Master CSV -->
+            <!-- Action 3: Export Master CSV -->
             <div class="action-card">
-                <div class="action-card-header">
-                    <span class="action-icon">📦</span>
-                    <span class="action-title">Export Master CSV (32 คอลัมน์)</span>
+                <div>
+                    <div class="action-card-header">
+                        <span class="action-icon">📦</span>
+                        <span class="action-title">Export Master CSV (32 คอลัมน์)</span>
+                    </div>
+                    <div class="action-desc">
+                        ส่งออกข้อมูลตาราง <code>terms</code> ทั้งหมด (42,347+ รายการ) เป็นไฟล์ <code>output/master_kahis_terminology.csv</code> พร้อม BOM รองรับการเปิดใน Excel
+                    </div>
                 </div>
-                <div class="action-desc">
-                    ส่งออกตาราง <code style="color:var(--accent)">terms</code> ทั้งหมด (42,299+ รายการ) เป็นไฟล์<br>
-                    <code style="color:var(--accent)">master_kahis_terminology.csv</code>
+                <div>
+                    <button class="btn-action btn-sage" id="btn-export-master" onclick="runExport('master')">
+                        <span>📦 Export Master CSV</span>
+                    </button>
+                    <div class="log-area" id="export-master-log" style="display:none"></div>
                 </div>
-                <button class="btn-action btn-green" id="btn-export-master" onclick="runExport('master')">
-                    📦 Export Master CSV
-                </button>
-                <div class="log-area" id="export-master-log" style="display:none"></div>
             </div>
 
-            <!-- Export KU Synonyms CSV -->
+            <!-- Action 4: Export KU Synonyms CSV -->
             <div class="action-card">
-                <div class="action-card-header">
-                    <span class="action-icon">📋</span>
-                    <span class="action-title">Export ku Synonyms CSV</span>
+                <div>
+                    <div class="action-card-header">
+                        <span class="action-icon">📋</span>
+                        <span class="action-title">Export ku Synonyms CSV</span>
+                    </div>
+                    <div class="action-desc">
+                        ส่งออกเฉพาะคำพ้องภาษาไทย มก. เป็นไฟล์ <code>ku_synonym_text_YYYYMMDD.csv</code> เพื่อสำรองข้อมูล หรือใช้งานกับระบบอื่น
+                    </div>
                 </div>
-                <div class="action-desc">
-                    ส่งออกเฉพาะ ku synonyms เป็นไฟล์<br>
-                    <code style="color:var(--accent)">ku_custom_synonyms.csv</code><br>
-                    เพื่อนำไปสำรองข้อมูล หรือใช้งาน
+                <div>
+                    <button class="btn-action btn-amber" id="btn-export-ku" onclick="runExport('ku')">
+                        <span>📋 Export ku Synonyms</span>
+                    </button>
+                    <div class="log-area" id="export-ku-log" style="display:none"></div>
                 </div>
-                <button class="btn-action btn-teal" id="btn-export-ku" onclick="runExport('ku')">
-                    📋 Export ku Synonyms
-                </button>
-                <div class="log-area" id="export-ku-log" style="display:none"></div>
             </div>
 
-            <!-- Import KU Synonyms CSV -->
+            <!-- Action 5: Import KU Synonyms CSV -->
             <div class="action-card">
-                <div class="action-card-header">
-                    <span class="action-icon">📤</span>
-                    <span class="action-title">Import ku Synonyms CSV</span>
+                <div>
+                    <div class="action-card-header">
+                        <span class="action-icon">📤</span>
+                        <span class="action-title">Import ku Synonyms CSV</span>
+                    </div>
+                    <div class="action-desc">
+                        นำเข้าไฟล์ CSV คำพ้องภาษาไทยเข้าตาราง <code>ku_synonym_text</code> โดยอัตโนมัติ (ไม่ลบข้อมูลเดิม และอัปเดตไฟล์เวอร์ชันใน <code>sources/4_KU-Custom/</code> ทันที)
+                    </div>
+                    <div class="file-upload-wrap">
+                        <input type="file" id="file-import-ku" accept=".csv" class="file-upload-input">
+                    </div>
                 </div>
-                <div class="action-desc">
-                    นำเข้าไฟล์ <code style="color:var(--accent)">ku_custom_synonyms.csv</code><br>
-                    กลับเข้าตารางคำพ้องภาษาไทย
+                <div>
+                    <button class="btn-action btn-warm-dark" id="btn-import-ku" onclick="runImportKu()">
+                        <span>📤 Import ku Synonyms CSV</span>
+                    </button>
+                    <div class="log-area" id="import-ku-log" style="display:none"></div>
                 </div>
-                <input type="file" id="file-import-ku" accept=".csv" style="font-size:12px; margin-bottom:8px; width:100%; color:var(--text1)">
-                <button class="btn-action btn-blue" id="btn-import-ku" onclick="runImportKu()">
-                    📤 Import ku Synonyms CSV
-                </button>
-                <div class="log-area" id="import-ku-log" style="display:none"></div>
             </div>
-
         </div>
 
-        <!-- 4. KU SYNONYM MANAGER -->
-        <div class="section-title">🌟 จัดการ ku Synonyms</div>
-        <div class="action-card">
-            <div class="action-card-header">
-                <span class="action-icon">✏️</span>
-                <span class="action-title">เพิ่ม / ลบ ku Synonym</span>
+        <!-- 4. FIRESTORE PENDING QUEUE (Review Web Suggestions) -->
+        <div class="section-header">
+            <div class="section-title">
+                <span class="section-title-icon">🔥</span>
+                <span>ตรวจสอบคำพ้องที่เสนอผ่านเว็บ (Cloud Firestore Pending Queue)</span>
             </div>
-            <div class="action-desc">
-                ค้นหา Concept ID แล้วเพิ่มหรือลบ ku synonym ได้ที่นี่
-                ข้อมูลจะถูกบันทึกลงตาราง <code style="color:var(--teal)">ku_synonym_text</code> ทันที
+            <div style="display:flex; gap:10px;">
+                <button class="btn-refresh-stats" onclick="loadFirestoreQueue()">
+                    <span>🔄 โหลดรายการใหม่</span>
+                </button>
+                <button class="btn-refresh-stats" style="background:var(--sage); color:#ffffff; border-color:transparent;" onclick="syncAllApprovedFromFirestore()">
+                    <span>☁️ ดึงรายการ Approved ทั้งหมดเข้า DB</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="queue-container">
+            <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
+                คำพ้องภาษาไทยที่สัตวแพทย์ส่งมาจากหน้า Browser (<code>index.html</code>) จะถูกนำมารออนุมัติที่นี่ เมื่อกด <strong>[✅ อนุมัติเข้า DB]</strong> ข้อมูลจะถูกบันทึกลง <code>terminology_search.db</code> และสร้างไฟล์เวอร์ชัน <code>sources/4_KU-Custom/ku_synonym_text_YYYYMMDD.csv</code> อัตโนมัติ (พร้อมย้ายไฟล์เวอร์ชันเก่าไปเก็บใน <code>archive/legacy_data/</code>)
+            </div>
+            <div id="firestore-queue-list" style="display:flex; flex-direction:column; gap:10px;">
+                <div style="font-size:12px; color:var(--text-muted); font-style:italic;">กำลังเชื่อมต่อ Cloud Firestore...</div>
+            </div>
+            <div class="log-area" id="firestore-sync-log" style="display:none"></div>
+        </div>
+
+        <!-- 5. DIRECT KU SYNONYM MANAGER (Direct DB Management) -->
+        <div class="section-header">
+            <div class="section-title">
+                <span class="section-title-icon">✏️</span>
+                <span>จัดการ ku Synonyms ในฐานข้อมูลโดยตรง</span>
+            </div>
+        </div>
+
+        <div class="ku-manager-card">
+            <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:16px;">
+                ค้นหาด้วย Concept ID เพื่อตรวจสอบ เพิ่ม หรือลบคำพ้องภาษาไทย ระบบจะบันทึกลงฐานข้อมูล SQLite และอัปเดตไฟล์เวอร์ชันใน <code>sources/4_KU-Custom/</code> ทันที
             </div>
             <div class="ku-row">
-                <input class="ku-input" id="ku-search-cid" type="text" placeholder="Concept ID เช่น 57054005 หรือ 111450001000009101">
-                <button class="btn-sm btn-blue" style="background:var(--accent);color:#fff" onclick="loadKuSynonyms()">ค้นหา</button>
+                <input class="ku-input" id="ku-search-cid" type="text" placeholder="พิมพ์ Concept ID เช่น 95570007 หรือ 111450001000009101">
+                <button class="btn-action btn-clay" style="width:auto; padding:0 22px;" onclick="loadKuSynonyms()">ค้นหา</button>
             </div>
-            <div id="ku-concept-info" style="font-size:12px;color:var(--text2);margin-bottom:10px;min-height:18px"></div>
+            <div id="ku-concept-info" style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px; min-height:20px;"></div>
             <div class="ku-row">
-                <input class="ku-input" id="ku-new-text" type="text" placeholder="ข้อความ ku synonym ใหม่ เช่น นิ่วในกระเพาะปัสสาวะ">
-                <button class="btn-sm" style="background:var(--green);color:#fff" onclick="addKuSynonym()">➕ เพิ่ม</button>
+                <input class="ku-input" id="ku-new-text" type="text" placeholder="พิมพ์ข้อความคำพ้องภาษาไทยใหม่ เช่น นิ่วในกระเพาะปัสสาวะ">
+                <button class="btn-action btn-sage" style="width:auto; padding:0 24px;" onclick="addKuSynonym()">➕ เพิ่มคำพ้อง</button>
             </div>
             <div class="ku-tag-list" id="ku-tag-list">
-                <span style="font-size:12px;color:var(--text3);font-style:italic">ค้นหา Concept ID ก่อน</span>
+                <span style="font-size:12px; color:var(--text-faint); font-style:italic;">ค้นหา Concept ID เพื่อดูและจัดการรายการคำพ้อง</span>
             </div>
         </div>
 
-    </div><!-- /.main -->
-</div><!-- /#app -->
+    </main>
+</div>
 
 <script>
-    // ===== CONFIG =====
+    // ===== CONFIG & FIREBASE INITIALIZATION =====
     const API_BASE = '';
+    let firestoreDb = null;
+    try {
+        if (window.firebase) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyCn5jTgv0Kn2brpnRV8Lvf7XUbHh2_PZhc",
+                authDomain: "kahis-terminology.firebaseapp.com",
+                projectId: "kahis-terminology",
+                storageBucket: "kahis-terminology.firebasestorage.app",
+                messagingSenderId: "146556934307",
+                appId: "1:146556934307:web:f5f0d06df872ff86d60716"
+            };
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            firestoreDb = firebase.firestore();
+        }
+    } catch (e) {
+        console.warn('Firestore init notice:', e);
+    }
 
-    // ===== DASHBOARD LOAD (No PIN lock in v6.0 Internal Admin Builder Mode) =====
+    // ===== INITIAL DASHBOARD LOAD =====
     window.addEventListener('DOMContentLoaded', () => {
         loadDashboard();
     });
@@ -726,22 +1235,143 @@
     async function loadDashboard() {
         await loadVersions();
         await loadStats();
+        await loadFirestoreQueue();
+    }
+
+    async function loadFirestoreQueue() {
+        const container = document.getElementById('firestore-queue-list');
+        if (!container) return;
+        if (!firestoreDb) {
+            container.innerHTML = '<div style="font-size:12.5px; color:var(--amber);">⚠️ ไม่สามารถโหลด Firebase SDK (ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต) — ยังสามารถใช้ปุ่ม ☁️ ดึงรายการผ่าน Python Server ได้</div>';
+            return;
+        }
+        container.innerHTML = '<div style="font-size:12.5px; color:var(--text-muted);">⏳ กำลังดึงรายการคำพ้องจาก Cloud Firestore...</div>';
+        try {
+            const snap = await firestoreDb.collection('ku_synonyms').get();
+            const pendingDocs = [];
+            snap.forEach(doc => {
+                const d = doc.data();
+                if ((d.status || 'pending') === 'pending') {
+                    pendingDocs.push({ id: doc.id, ...d });
+                }
+            });
+            if (pendingDocs.length === 0) {
+                container.innerHTML = '<div style="font-size:12.5px; color:var(--sage); font-weight:600;">✅ ไม่มีรายการคำพ้องรออนุมัติในขณะนี้ (Pending = 0 รายการ)</div>';
+                return;
+            }
+            container.innerHTML = '';
+            pendingDocs.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'queue-item';
+                row.innerHTML = `
+                    <div style="font-size:13px; line-height:1.5;">
+                        <span class="stat-badge badge-tag-ku" style="margin-right:8px;">PENDING</span>
+                        <strong style="color:var(--text-heading); font-size:14.5px;">${escapeHtml(item.synonym_text)}</strong>
+                        <span style="color:var(--text-muted); margin-left:10px;">➔ Concept ID: <code style="font-family:'JetBrains Mono', monospace; font-weight:600; color:var(--clay-blue);">${escapeHtml(item.concept_id)}</code></span>
+                        <div style="font-size:11.5px; color:var(--text-muted); margin-top:3px;">
+                            ผู้เสนอ: <strong>${escapeHtml(item.submitted_by || 'สัตวแพทย์')}</strong> | หมายเหตุ: ${escapeHtml(item.clinical_note || '-')} | เวลา: ${escapeHtml(item.created_at || '-')}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-pill-sm" style="background:var(--sage); color:#fff;" onclick="approveFirestoreSynonym('${item.id}', '${escapeHtml(item.concept_id)}', '${escapeHtml(item.synonym_text)}')">
+                            ✅ อนุมัติเข้า DB
+                        </button>
+                        <button class="btn-pill-sm" style="background:var(--terracotta); color:#fff;" onclick="rejectFirestoreSynonym('${item.id}')">
+                            ❌ ลบ/ปฏิเสธ
+                        </button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        } catch (err) {
+            container.innerHTML = `<div style="font-size:12px; color:var(--terracotta);">❌ ไม่สามารถโหลดรายการจาก Firestore: ${escapeHtml(err.message)}</div>`;
+        }
+    }
+
+    async function approveFirestoreSynonym(docId, conceptId, synText) {
+        try {
+            // 1. Add to local SQLite DB + rotate versioned CSV in sources/4_KU-Custom/
+            const res = await fetch(`${API_BASE}/api/ku_synonym/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ concept_id: conceptId, text: synText, lang: 'ku' })
+            });
+            const data = await res.json();
+            if (data.error && res.status !== 409) {
+                throw new Error(data.error);
+            }
+            // 2. Mark as approved in Cloud Firestore
+            if (firestoreDb) {
+                await firestoreDb.collection('ku_synonyms').doc(docId).update({
+                    status: 'approved',
+                    approved_at: new Date().toISOString()
+                });
+            }
+            showToast(`✅ อนุมัติ "${synText}" ลง DB และสร้างไฟล์ CSV ใหม่แล้ว`, 'ok');
+            await loadFirestoreQueue();
+            await loadVersions();
+            await loadStats();
+        } catch (err) {
+            showToast(`❌ อนุมัติไม่สำเร็จ: ${err.message}`, 'err');
+        }
+    }
+
+    async function rejectFirestoreSynonym(docId) {
+        if (!confirm('ยืนยันการลบ/ปฏิเสธข้อเสนอคำพ้องนี้ออกจาก Cloud Firestore?')) return;
+        try {
+            if (firestoreDb) {
+                await firestoreDb.collection('ku_synonyms').doc(docId).delete();
+            }
+            showToast('🗑️ ลบข้อเสนอคำพ้องออกจากคิวเรียบร้อย', 'ok');
+            await loadFirestoreQueue();
+        } catch (err) {
+            showToast(`❌ ลบไม่สำเร็จ: ${err.message}`, 'err');
+        }
+    }
+
+    async function syncAllApprovedFromFirestore() {
+        const logEl = document.getElementById('firestore-sync-log');
+        logEl.style.display = 'block';
+        logEl.innerHTML = '';
+        appendLog(logEl, 'info', '⏳ กำลังดึงรายการ Approved ทั้งหมดจาก Cloud Firestore รวมเข้า SQLite DB...');
+        try {
+            const res = await fetch(`${API_BASE}/api/admin/sync_firestore`);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            (data.report || '').split(/\r?\n/).forEach(line => {
+                if (!line) return;
+                appendLog(logEl, line.includes('SUCCESS') ? 'ok' : 'info', line);
+            });
+            showToast('✅ ซิงก์ข้อมูลจาก Firestore เข้า DB สำเร็จ!', 'ok');
+            await loadVersions();
+            await loadStats();
+        } catch (err) {
+            appendLog(logEl, 'err', `❌ ${err.message}`);
+            showToast('❌ ซิงก์ไม่สำเร็จ', 'err');
+        }
     }
 
     async function loadVersions() {
         try {
             const res = await fetch(`${API_BASE}/api/release_versions`);
             const data = await res.json();
-            document.getElementById('ver-sapdt').textContent = data.sapdt || 'N/A';
-            document.getElementById('ver-vsct').textContent  = data.vsct  || 'N/A';
-            document.getElementById('ver-sct').textContent   = data.sct   || 'N/A';
+            document.getElementById('ver-sapdt').textContent = (data.sapdt || 'N/A') + (data.sapdt_source ? ` (${data.sapdt_source})` : '');
+            document.getElementById('ver-vsct').textContent  = (data.vsct  || 'N/A') + (data.vsct_source  ? ` (${data.vsct_source})`  : '');
+            document.getElementById('ver-sct').textContent   = (data.sct   || 'N/A') + (data.sct_source   ? ` (${data.sct_source})`   : '');
+            if (document.getElementById('ver-ku')) {
+                document.getElementById('ver-ku').textContent = (data.ku || 'N/A') + (data.ku_source ? ` (${data.ku_source})` : '');
+            }
             document.getElementById('sapdt-status').textContent = '✅ พบ';
             document.getElementById('vsct-status').textContent  = '✅ พบ';
             document.getElementById('sct-status').textContent   = '✅ พบ';
+            if (document.getElementById('ku-status')) {
+                document.getElementById('ku-status').textContent = '✅ พบ';
+            }
         } catch(e) {
             document.getElementById('ver-sapdt').textContent = 'ไม่สามารถเชื่อมต่อ server';
-            ['sapdt-status','vsct-status','sct-status'].forEach(id => {
-                document.getElementById(id).textContent = '❌ Server offline';
+            ['sapdt-status','vsct-status','sct-status','ku-status'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '❌ Server offline';
             });
         }
     }
@@ -764,26 +1394,22 @@
             if (document.getElementById('stat-global-terms')) {
                 document.getElementById('stat-global-terms').textContent = fmt(d.global_concept_terms);
                 document.getElementById('stat-global-rels').textContent  = fmt(d.global_relationships);
-                document.getElementById('stat-db-size').textContent     = (d.db_size_mb || '203.6') + ' MB';
-                document.getElementById('stat-gz-size').textContent     = (d.gz_size_mb || '50.9') + ' MB';
+                document.getElementById('stat-db-size').textContent     = (d.db_size_mb || '206.6') + ' MB';
+                document.getElementById('stat-gz-size').textContent     = (d.gz_size_mb || '53.6') + ' MB';
                 document.getElementById('stat-backups').textContent     = fmt(d.backup_count) + ' files';
-                document.getElementById('stat-db-mtime').textContent     = d.db_last_modified || 'N/A';
+                document.getElementById('stat-db-mtime').textContent   = d.db_last_modified || 'N/A';
             }
 
-            // Semantic Distribution
+            // Semantic Distribution Pills
             if (d.semantic_counts && document.getElementById('semantic-dist-grid')) {
                 const sGrid = document.getElementById('semantic-dist-grid');
                 sGrid.innerHTML = '';
                 Object.entries(d.semantic_counts).forEach(([tag, count]) => {
                     const card = document.createElement('div');
-                    card.className = 'stat-card';
+                    card.className = 'sem-card';
                     card.innerHTML = `
-                        <div class="stat-badge-row">
-                            <span class="stat-badge badge-tag-sapdt">SA-PDT</span>
-                            <span class="stat-badge badge-tag-vsct">VSCT</span>
-                        </div>
-                        <div class="stat-value" style="font-size:18px">${fmt(count)}</div>
-                        <div class="stat-label">${escapeHtml(tag)}</div>
+                        <div class="sem-value">${fmt(count)}</div>
+                        <div class="sem-label">${escapeHtml(tag)}</div>
                     `;
                     sGrid.appendChild(card);
                 });
@@ -798,7 +1424,7 @@
 
     function escapeHtml(str) {
         if (!str) return '';
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     async function runImportKu() {
@@ -867,6 +1493,7 @@
                 if (res.ok) {
                     logArea.textContent = `✅ นำเข้าสำเร็จ! เพิ่มคำพ้องใหม่เรียบร้อย ${res.imported} รายการ`;
                     loadStats();
+                    loadVersions();
                 } else {
                     logArea.textContent = `❌ การนำเข้าล้มเหลว: ${res.error}`;
                 }
@@ -895,7 +1522,7 @@
         if (rebuildSource) {
             rebuildSource.close();
             rebuildSource = null;
-            btn.textContent = '🔨 Rebuild DB ใหม่';
+            btn.innerHTML = '<span>🔨 Rebuild DB ใหม่</span>';
             btn.disabled = false;
             appendLog(logEl, 'warn', '⚠ หยุดการ rebuild');
             progBar.className = 'progress-bar';
@@ -906,8 +1533,7 @@
         progWrap.style.display = 'block';
         progBar.className = 'progress-bar indeterminate';
         logEl.innerHTML = '';
-        btn.textContent = '⏹ หยุด Rebuild';
-        btn.className = 'btn-action btn-red';
+        btn.innerHTML = '<span>⏹ หยุด Rebuild</span>';
         btn.disabled = false;
 
         appendLog(logEl, 'info', '▶ เชื่อมต่อ server เพื่อ rebuild…');
@@ -929,10 +1555,9 @@
             progBar.style.width = '100%';
             rebuildSource.close();
             rebuildSource = null;
-            btn.textContent = '🔨 Rebuild DB ใหม่';
-            btn.className = 'btn-action btn-red';
+            btn.innerHTML = '<span>🔨 Rebuild DB ใหม่</span>';
             showToast('✅ Rebuild สำเร็จ!', 'ok');
-            setTimeout(() => loadStats(), 1000);  // refresh stats
+            setTimeout(() => { loadStats(); loadVersions(); }, 1000);
         });
 
         rebuildSource.addEventListener('error', e => {
@@ -941,8 +1566,7 @@
             progBar.className = 'progress-bar';
             rebuildSource.close();
             rebuildSource = null;
-            btn.textContent = '🔨 Rebuild DB ใหม่';
-            btn.className = 'btn-action btn-red';
+            btn.innerHTML = '<span>🔨 Rebuild DB ใหม่</span>';
             showToast('❌ Rebuild ล้มเหลว', 'err');
         });
 
@@ -951,8 +1575,7 @@
             progBar.className = 'progress-bar';
             if (rebuildSource) rebuildSource.close();
             rebuildSource = null;
-            btn.textContent = '🔨 Rebuild DB ใหม่';
-            btn.className = 'btn-action btn-red';
+            btn.innerHTML = '<span>🔨 Rebuild DB ใหม่</span>';
         };
     }
 
@@ -963,7 +1586,7 @@
         logEl.style.display = 'block';
         logEl.innerHTML = '';
         btn.disabled = true;
-        appendLog(logEl, 'info', '⏳ กำลังตรวจสอบความถูกต้องฐานข้อมูล 34 จุด (QA Audit)…');
+        appendLog(logEl, 'info', '⏳ กำลังตรวจสอบความถูกต้องฐานข้อมูล 35 จุด (QA Audit v7.0)…');
         try {
             const res  = await fetch(`${API_BASE}/api/admin/verify`);
             const data = await res.json();
@@ -979,7 +1602,7 @@
                 appendLog(logEl, type, line);
             });
             if (data.ok) {
-                showToast('✅ ผ่านการตรวจสอบครบทุกจุด!', 'ok');
+                showToast('✅ ผ่านการตรวจสอบครบทุกจุด (35/35 PASS)!', 'ok');
             } else {
                 showToast('⚠️ พบจุดที่ต้องตรวจสอบในรายงาน', 'err');
             }
@@ -1009,7 +1632,6 @@
         try {
             const res = await fetch(`${API_BASE}${endpoint}`);
             if (res.ok) {
-                // Stream as download
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -1023,9 +1645,8 @@
                 throw new Error(`HTTP ${res.status}`);
             }
         } catch(e) {
-            appendLog(logEl, 'warn', `⚠ Export endpoint ยังอยู่ระหว่างพัฒนา`);
-            appendLog(logEl, 'info', `คำสั่ง: python3 scripts/export_csv.py --type=${type}`);
-            showToast('⚠ ดูคำสั่งใน log', 'err');
+            appendLog(logEl, 'warn', `⚠ เกิดข้อผิดพลาดในการ Export: ${e.message}`);
+            showToast('⚠ Export ไม่สำเร็จ', 'err');
         }
         btn.disabled = false;
     }
@@ -1059,14 +1680,14 @@
         const list = document.getElementById('ku-tag-list');
         list.innerHTML = '';
         if (kuSynonyms.length === 0) {
-            list.innerHTML = '<span style="font-size:12px;color:var(--text3);font-style:italic">ยังไม่มี ku synonym</span>';
+            list.innerHTML = '<span style="font-size:12px;color:var(--text-faint);font-style:italic">ยังไม่มี ku synonym ใน Concept นี้</span>';
             return;
         }
         kuSynonyms.forEach(s => {
             const tag = document.createElement('span');
             tag.className = 'ku-tag';
             tag.innerHTML = `
-                <span>${escHtml(s.text)}</span>
+                <span>${escapeHtml(s.text)}</span>
                 <button class="ku-tag-del" title="ลบ" onclick="deleteKuSynonym(${s.id})">×</button>
             `;
             list.appendChild(tag);
@@ -1087,15 +1708,17 @@
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             document.getElementById('ku-new-text').value = '';
-            showToast(`✅ เพิ่ม "${text}" แล้ว`, 'ok');
-            await loadKuSynonyms(); // refresh
+            showToast(`✅ เพิ่ม "${text}" ลงในฐานข้อมูลแล้ว`, 'ok');
+            await loadKuSynonyms();
+            await loadVersions();
+            await loadStats();
         } catch(e) {
             showToast(`❌ ${e.message}`, 'err');
         }
     }
 
     async function deleteKuSynonym(id) {
-        if (!confirm('ลบ ku synonym นี้?')) return;
+        if (!confirm('ยืนยันการลบ ku synonym นี้ออกจากฐานข้อมูล?')) return;
         try {
             const res = await fetch(`${API_BASE}/api/ku_synonym/delete`, {
                 method: 'POST',
@@ -1104,8 +1727,10 @@
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
-            showToast('✅ ลบแล้ว', 'ok');
-            await loadKuSynonyms(); // refresh
+            showToast('✅ ลบคำพ้องแล้ว', 'ok');
+            await loadKuSynonyms();
+            await loadVersions();
+            await loadStats();
         } catch(e) {
             showToast(`❌ ${e.message}`, 'err');
         }
@@ -1120,32 +1745,16 @@
         el.scrollTop = el.scrollHeight;
     }
 
-    function escHtml(str) {
-        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
     let toastTimer;
     function showToast(msg, type='ok') {
         const t = document.getElementById('toast');
         t.textContent = msg;
         t.className = `show ${type}`;
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+        toastTimer = setTimeout(() => { t.className = ''; }, 3200);
     }
-
-    // Shake CSS keyframe
-    const styleEl = document.createElement('style');
-    styleEl.textContent = `
-        @keyframes shake {
-            0%,100%{transform:translateX(0)}
-            20%{transform:translateX(-10px)}
-            40%{transform:translateX(10px)}
-            60%{transform:translateX(-6px)}
-            80%{transform:translateX(6px)}
-        }
-    `;
-    document.head.appendChild(styleEl);
 </script>
 
+<div id="pin-overlay" class="hidden" style="display:none"></div>
 </body>
 </html>

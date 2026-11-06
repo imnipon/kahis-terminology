@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-build_direct_db.py (v6.0)
+build_direct_db.py (v7.0)
 =========================
-สร้างและอัปเดตฐานข้อมูล terminology_search.db โดยตรงจาก 3 แหล่งข้อมูลต้นฉบับ + KU Custom Data:
-  1. SA-PDT Release File (SA-PDTReleaseFile_full_*.txt)
-  2. SNOMED CT Veterinary Extension (SnomedCT_VETExtension_* — Folder หรือ .zip)
-  3. SNOMED CT International Edition (SnomedCT_InternationalRF2_* — Folder หรือ .zip)
-  4. KU Custom Data (ku_custom_synonyms.csv + ตาราง ku_synonym_text และ Custom Concepts ใน DB เดิม)
+สร้างและอัปเดตฐานข้อมูล terminology_search.db โดยตรงจาก 3 แหล่งข้อมูลต้นฉบับ + KU Custom Data
+ภายในโฟลเดอร์ sources/ ของโปรเจกต์:
+  1. sources/1_SA-PDT/   -> SA-PDT Release File (SA-PDTReleaseFile_full_*.txt หรือ .xml + ไฟล์ Changes *to*)
+  2. sources/2_VSCT/     -> SNOMED CT Veterinary Extension (SnomedCT_VETExtension_* — Folder หรือ .zip)
+  3. sources/3_SCT-Int/  -> SNOMED CT International Edition (SnomedCT_InternationalRF2_* — Folder หรือ .zip)
+  4. sources/4_KU-Custom/-> KU Custom Data (ku_synonym_text_YYYYMMDD.csv + ตาราง ku_synonym_text ใน DB เดิม)
 
-คุณสมบัติหลัก (v6.0 Specification):
-  - คงโครงสร้างตาราง (Schema 4 ตาราง, terms 32 คอลัมน์) เดิม 100% (Zero Breaking Changes)
-  - บรรจุครบทั้ง 42,299 Concepts (SA-PDT 4,489 ∪ VSCT Concept 37,416 ∪ VSCT Description 3,414)
+คุณสมบัติหลัก:
+  - คงโครงสร้างตารางหลัก (Schema 4 ตารางหลัก, terms 32 คอลัมน์) เดิม 100% (Zero Breaking Changes)
+  - เพิ่มตาราง db_metadata เพื่อฝังเลขเวอร์ชันของทั้ง 4 แหล่ง (SA-PDT, VSCT, SCT, KU) ลงในตัวไฟล์ .db
+  - บันทึกสำเนาฐานข้อมูลแยกตามเวอร์ชันไว้ใน releases/kahis_SAPDT<v>_VSCT<v>_SCT<v>_KU<v>.db
   - คัดเลือก display_name ตามลำดับ: SA-PDT Preferred > VSCT Preferred (332501000009101) > SCT-Int Preferred (900000000000509007)
   - คัดเลือก snomed_fsn ตามลำดับ: VSCT FSN > SCT-Int FSN
   - รวมคำพ้องภาษาอังกฤษทุกแหล่ง (SA-PDT ∪ VSCT -en ∪ SCT-Int -en) ลงในคอลัมน์ synonym และ FTS5
   - คำนวณ body_system (Categories) และ snomed_parent_concepts ครบทุกแถวในขั้นตอนเดียว
-  - Update-Safe 100%: สำรอง DB เดิม, รักษา ku_synonym_text และ Custom Concepts (match_type='ku_custom'),
-    ดึงรหัสทดแทน replacement_concept_id จาก Association Refset และป้องกันรหัสกำพร้า (Zero Orphans)
+  - เติมคอลัมน์ sapdt_change_type จากไฟล์ SA-PDT Changes (*to*.txt / .xml)
+  - Update-Safe 100%: สำรอง DB เดิม, รักษา ku_synonym_text และ Custom Concepts (match_type='ku_custom')
 """
 
 import os
@@ -43,11 +45,13 @@ csv.field_size_limit(min(sys.maxsize, 10 * 1024 * 1024))
 # ---------------------------------------------------------------------------
 # Path Resolution
 # ---------------------------------------------------------------------------
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_DIR    = os.path.dirname(SCRIPT_DIR)               # .../kahis-terminology/
-KAHIS_DIR  = os.path.dirname(APP_DIR)                  # .../GitHub/
-DB_OUT     = os.path.join(APP_DIR, 'terminology_search.db')
-DB_TEMP    = DB_OUT + '.building'
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+APP_DIR      = os.path.dirname(SCRIPT_DIR)               # .../kahis-terminology/
+KAHIS_DIR    = os.path.dirname(APP_DIR)                  # .../imnipon_project/
+SOURCES_DIR  = os.path.join(APP_DIR, 'sources')
+RELEASES_DIR = os.path.join(APP_DIR, 'releases')
+DB_OUT       = os.path.join(APP_DIR, 'terminology_search.db')
+DB_TEMP      = DB_OUT + '.building'
 
 # SNOMED CT Constants
 IS_A_TYPE       = '116680003'
@@ -133,6 +137,16 @@ def extract_sem_tag(fsn_text):
     return m.group(1).strip() if m else ''
 
 
+def extract_release_date(path_str, fallback='N/A'):
+    """ดึงเลขวันที่ 8 หลัก (YYYYMMDD) ตัวสุดท้ายจากชื่อไฟล์หรือโฟลเดอร์"""
+    if not path_str:
+        return fallback
+    matches = re.findall(r'(20\d{6})', os.path.basename(path_str))
+    if not matches:
+        matches = re.findall(r'(20\d{6})', path_str)
+    return matches[-1] if matches else fallback
+
+
 # ---------------------------------------------------------------------------
 # RF2 Reader Helper (รองรับทั้งโฟลเดอร์ที่แตกแล้ว และไฟล์ .zip โดยไม่ต้องแตกไฟล์)
 # ---------------------------------------------------------------------------
@@ -186,16 +200,19 @@ class RF2Archive:
 
 
 # ---------------------------------------------------------------------------
-# Auto-detect Source Folders / Zip Archives
+# Auto-detect Source Folders / Zip Archives (Prioritizing project sources/)
 # ---------------------------------------------------------------------------
 def get_search_roots():
+    dl_dir = os.path.expanduser('~/Downloads')
+    dl_subfolders = glob.glob(os.path.join(dl_dir, 'Download Terminology*')) if os.path.exists(dl_dir) else []
     roots = [
+        os.path.join(SOURCES_DIR, '1_SA-PDT'),
+        os.path.join(SOURCES_DIR, '2_VSCT'),
+        os.path.join(SOURCES_DIR, '3_SCT-Int'),
+        SOURCES_DIR,
         APP_DIR,
-        KAHIS_DIR,
-        os.path.dirname(KAHIS_DIR),
-        os.path.expanduser('~/Downloads'),
+        *sorted(dl_subfolders, reverse=True),
     ]
-    # เพิ่มตัวแปรสภาพแวดล้อมถ้ามีการระบุ
     env_dir = os.environ.get('KAHIS_SOURCES_DIR')
     if env_dir and os.path.exists(env_dir):
         roots.insert(0, env_dir)
@@ -208,17 +225,26 @@ def find_sources():
     vsct_src   = None
     sct_src    = None
 
-    # 1. ค้นหาไฟล์ SA-PDTReleaseFile_full_*.txt
+    # 1. ค้นหาไฟล์ SA-PDTReleaseFile_full_*.txt (หรือ ReleaseFile_full_*.xml เป็น fallback)
     sapdt_candidates = []
     for r in roots:
         for pat in [
-            os.path.join(r, 'SA-PDT*', '**', 'SA-PDTReleaseFile_full_*.txt'),
+            os.path.join(r, 'SA-PDTReleaseFile_full_*.txt'),
             os.path.join(r, 'SA-PDT*', 'SA-PDTReleaseFile_full_*.txt'),
+            os.path.join(r, 'SA-PDT*', '**', 'SA-PDTReleaseFile_full_*.txt'),
             os.path.join(r, 'Small Animal Problem*', '**', 'SA-PDTReleaseFile_full_*.txt'),
         ]:
             sapdt_candidates.extend(glob.glob(pat, recursive=True))
+    if not sapdt_candidates:
+        for r in roots:
+            sapdt_candidates.extend(glob.glob(os.path.join(r, '**', 'ReleaseFile_full_*.xml'), recursive=True))
     if sapdt_candidates:
-        sapdt_file = sorted(sapdt_candidates, key=lambda p: os.path.basename(p))[-1]
+        sapdt_candidates.sort(key=lambda p: (
+            SOURCES_DIR.lower() in p.lower(),
+            extract_release_date(p, '00000000'),
+            os.path.basename(p)
+        ))
+        sapdt_file = sapdt_candidates[-1]
 
     def has_refset(path):
         if os.path.isdir(path):
@@ -242,8 +268,12 @@ def find_sources():
                 if os.path.isdir(hit) or hit.endswith('.zip'):
                     vsct_candidates.append(hit)
     if vsct_candidates:
-        # ให้ความสำคัญกับชุดที่มีไฟล์ Refset ครบถ้วน และโฟลเดอร์ที่แตกแล้วก่อน
-        vsct_candidates.sort(key=lambda p: (has_refset(p), os.path.basename(p).replace('.zip', ''), os.path.isdir(p)))
+        vsct_candidates.sort(key=lambda p: (
+            has_refset(p),
+            SOURCES_DIR.lower() in p.lower(),
+            extract_release_date(p, '00000000'),
+            os.path.isdir(p)
+        ))
         vsct_src = vsct_candidates[-1]
 
     # 3. ค้นหา SCT International (โฟลเดอร์ หรือ .zip)
@@ -253,31 +283,68 @@ def find_sources():
             if os.path.isdir(hit) or hit.endswith('.zip'):
                 sct_candidates.append(hit)
     if sct_candidates:
-        sct_candidates.sort(key=lambda p: (has_refset(p), os.path.basename(p).replace('.zip', ''), os.path.isdir(p)))
+        sct_candidates.sort(key=lambda p: (
+            has_refset(p),
+            SOURCES_DIR.lower() in p.lower(),
+            extract_release_date(p, '00000000'),
+            os.path.isdir(p)
+        ))
         sct_src = sct_candidates[-1]
 
     return sapdt_file, vsct_src, sct_src
 
 
+def find_extra_sources(sapdt_file=None):
+    """ค้นหาไฟล์ KU Synonym ที่มีเลขเวอร์ชัน (ku_synonym_text_YYYYMMDD.csv) และไฟล์ SA-PDT Changes (*to*.txt)"""
+    ku_dir = os.path.join(SOURCES_DIR, '4_KU-Custom')
+    ku_candidates = []
+    if os.path.exists(ku_dir):
+        ku_candidates.extend(glob.glob(os.path.join(ku_dir, 'ku_synonym_text_*.csv')))
+        ku_candidates.extend(glob.glob(os.path.join(ku_dir, 'ku_custom_synonyms_*.csv')))
+    ku_src = None
+    if ku_candidates:
+        ku_candidates.sort(key=lambda p: (extract_release_date(p, '00000000'), os.path.basename(p)))
+        ku_src = ku_candidates[-1]
+    else:
+        fallback_ku = os.path.join(APP_DIR, 'ku_custom_synonyms.csv')
+        if os.path.exists(fallback_ku):
+            ku_src = fallback_ku
+
+    sapdt_delta_file = None
+    if sapdt_file:
+        sdir = os.path.dirname(sapdt_file)
+        delta_hits = glob.glob(os.path.join(sdir, 'SA-PDTReleaseFile_*to*.txt'))
+        if not delta_hits:
+            delta_hits = glob.glob(os.path.join(sdir, '**', 'ReleaseFile_*to*.xml'), recursive=True)
+        if delta_hits:
+            sapdt_delta_file = sorted(delta_hits)[-1]
+
+    return ku_src, sapdt_delta_file
+
+
 # ---------------------------------------------------------------------------
 # Step 0: Backup & Extract Existing Custom Data (Update-Safe Pipeline)
 # ---------------------------------------------------------------------------
-def backup_and_extract_existing():
+def backup_and_extract_existing(ku_src=None):
     """
     สำรองไฟล์ DB เดิมเข้าโฟลเดอร์ backup/ และดึงข้อมูล:
-      1. ku_synonym_text จาก DB เดิม + ไฟล์ ku_custom_synonyms.csv
-      2. แถวในตาราง terms ของ DB เดิม (ทั้ง match_type='ku_custom' และรหัสเดิมเพื่อป้องกัน Orphan)
+      1. ku_synonym_text จาก sources/4_KU-Custom/ku_synonym_text_YYYYMMDD.csv + DB เดิม + ku_custom_synonyms.csv
+      2. แถวในตาราง terms ของ DB เดิม (เฉพาะ match_type='ku_custom')
     """
     ku_synonyms_map = {}  # (concept_id, text_lower) -> (concept_id, text, lang_tag, created_at)
     old_terms_map   = {}  # cid -> dict of row columns
     custom_rows     = []  # list of dicts for match_type == 'ku_custom'
 
-    # 0.1 อ่านจากไฟล์ ku_custom_synonyms.csv ในโปรเจกต์
-    csv_paths = [
+    csv_paths = []
+    if ku_src and os.path.exists(ku_src):
+        csv_paths.append(ku_src)
+    for p in [
         os.path.join(APP_DIR, 'ku_custom_synonyms.csv'),
         os.path.join(APP_DIR, 'Custom_data', 'ku_custom_synonyms.csv'),
         os.path.join(APP_DIR, 'output', 'ku_custom_synonyms.csv'),
-    ]
+    ]:
+        if p not in csv_paths:
+            csv_paths.append(p)
     for cpath in csv_paths:
         if os.path.exists(cpath):
             try:
@@ -350,51 +417,85 @@ def backup_and_extract_existing():
 
 
 # ---------------------------------------------------------------------------
-# Step 1: Read SA-PDT Release File
+# Step 1: Read SA-PDT Release File (.txt or .xml) & Delta Changes File
 # ---------------------------------------------------------------------------
 def read_sapdt_file(sapdt_file):
     """
-    อ่านไฟล์ SA-PDTReleaseFile_full_*.txt
+    อ่านไฟล์ SA-PDTReleaseFile_full_*.txt หรือ ReleaseFile_full_*.xml
     Columns: Status | Concept Identifier | Description Identifier | Description Term | Term Designation
     """
     log(f'  กำลังอ่าน SA-PDT: {os.path.basename(sapdt_file)}')
     agg = {}
-    with open(sapdt_file, 'r', encoding='utf-8-sig', errors='replace') as f:
-        reader = csv.DictReader(f, delimiter='\t')
-        for row in reader:
-            cid = (row.get('Concept Identifier') or '').strip()
+
+    if sapdt_file.lower().endswith('.xml'):
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(sapdt_file)
+        root = tree.getroot()
+        for conc in root.findall('.//Concept'):
+            cid = (conc.findtext('ConceptID') or '').strip()
             if not cid:
                 continue
-            status  = (row.get('Status') or 'Active').strip()
-            term    = (row.get('Description Term') or '').strip()
-            desig   = (row.get('Term Designation') or 'Acceptable').strip()
-            desc_id = (row.get('Description Identifier') or '').strip()
-
+            c_status = (conc.findtext('Status') or 'Active').strip()
             if cid not in agg:
                 agg[cid] = {
-                    'status': 'Retired',
+                    'status': 'Active' if c_status == 'Active' else 'Retired',
                     'preferred': '',
                     'preferred_active': False,
                     'synonyms': [],
                     'desc_ids': [],
                 }
-
             rec = agg[cid]
-            if status == 'Active':
-                rec['status'] = 'Active'
+            for desc in conc.findall('.//Description'):
+                d_status = (desc.findtext('Status') or c_status).strip()
+                desc_id  = (desc.findtext('DescriptionID') or '').strip()
+                term     = (desc.findtext('Term') or '').strip()
+                desig    = (desc.findtext('IsDisplay') or 'Acceptable').strip()
+                if desc_id and desc_id not in rec['desc_ids']:
+                    rec['desc_ids'].append(desc_id)
+                if desig == 'Preferred':
+                    if d_status == 'Active' or not rec['preferred']:
+                        rec['preferred'] = term
+                        if d_status == 'Active':
+                            rec['preferred_active'] = True
+                else:
+                    if term and term not in rec['synonyms']:
+                        rec['synonyms'].append(term)
+    else:
+        with open(sapdt_file, 'r', encoding='utf-8-sig', errors='replace') as f:
+            reader = csv.DictReader(f, delimiter='\t')
+            for row in reader:
+                cid = (row.get('Concept Identifier') or '').strip()
+                if not cid:
+                    continue
+                status  = (row.get('Status') or 'Active').strip()
+                term    = (row.get('Description Term') or '').strip()
+                desig   = (row.get('Term Designation') or 'Acceptable').strip()
+                desc_id = (row.get('Description Identifier') or '').strip()
 
-            if desc_id and desc_id not in rec['desc_ids']:
-                rec['desc_ids'].append(desc_id)
+                if cid not in agg:
+                    agg[cid] = {
+                        'status': 'Retired',
+                        'preferred': '',
+                        'preferred_active': False,
+                        'synonyms': [],
+                        'desc_ids': [],
+                    }
 
-            if desig == 'Preferred':
-                # ให้คำที่เป็น Active ชนะคำที่เป็น Retired เสมอ
-                if status == 'Active' or not rec['preferred']:
-                    rec['preferred'] = term
-                    if status == 'Active':
-                        rec['preferred_active'] = True
-            else:
-                if term and term not in rec['synonyms']:
-                    rec['synonyms'].append(term)
+                rec = agg[cid]
+                if status == 'Active':
+                    rec['status'] = 'Active'
+
+                if desc_id and desc_id not in rec['desc_ids']:
+                    rec['desc_ids'].append(desc_id)
+
+                if desig == 'Preferred':
+                    if status == 'Active' or not rec['preferred']:
+                        rec['preferred'] = term
+                        if status == 'Active':
+                            rec['preferred_active'] = True
+                else:
+                    if term and term not in rec['synonyms']:
+                        rec['synonyms'].append(term)
 
     # กรณีในไฟล์ SA-PDT มีเฉพาะแถว Acceptable และไม่มีแถว Preferred (พบ 2 รหัสในต้นฉบับ) ให้ใช้คำแรกของ Acceptable แทน
     for cid, rec in agg.items():
@@ -403,6 +504,41 @@ def read_sapdt_file(sapdt_file):
 
     log(f'  SA-PDT โหลดสำเร็จ: {len(agg):,} Concepts')
     return agg
+
+
+def read_sapdt_changes(delta_file):
+    """อ่านไฟล์ SA-PDTReleaseFile_*to*.txt เพื่อดึง Change Type ของแต่ละ Concept"""
+    changes_map = {}
+    if not delta_file or not os.path.exists(delta_file):
+        return changes_map
+    log(f'  กำลังอ่าน SA-PDT Changes (Delta): {os.path.basename(delta_file)}')
+    try:
+        if delta_file.lower().endswith('.xml'):
+            import xml.etree.ElementTree as ET
+            root = ET.parse(delta_file).getroot()
+            for item in root.findall('.//ChangeItem') + root.findall('.//Concept'):
+                cid   = (item.findtext('ConceptID') or '').strip()
+                ctype = (item.findtext('ChangeType') or '').strip()
+                if cid and ctype:
+                    changes_map.setdefault(cid, [])
+                    if ctype not in changes_map[cid]:
+                        changes_map[cid].append(ctype)
+        else:
+            with open(delta_file, 'r', encoding='utf-8-sig', errors='replace') as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                for row in reader:
+                    cid   = (row.get('Concept Identifier') or '').strip()
+                    ctype = (row.get('Change Type') or row.get('CHANGETYPE') or '').strip()
+                    if cid and ctype:
+                        changes_map.setdefault(cid, [])
+                        if ctype not in changes_map[cid]:
+                            changes_map[cid].append(ctype)
+    except Exception as e:
+        log(f'  ไม่สามารถอ่านไฟล์ SA-PDT Changes: {e}', 'WARN')
+
+    resolved = {cid: ' | '.join(types) for cid, types in changes_map.items()}
+    log(f'  พบรายการเปลี่ยนแปลงใน SA-PDT รอบนี้: {len(resolved):,} Concepts')
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -568,8 +704,6 @@ def read_sct_archive(sct_path, target_vet_cids, vtsl_pref_dids, vsct_us_pref_did
     log(f'  SCT-Int Concepts (ที่ตรงกับฐานสัตวแพทย์): {len(sct_concs):,}')
 
     # 3.2 Description Snapshot (-en)
-    # เก็บ FSN ของทุก Concept ลง sct_fsn_map (สำหรับ concept_terms + body_system)
-    # และเก็บ Synonyms + Description IDs ของ target_vet_cids ลง sct_descs
     sct_fsn_map     = {}
     sct_descs       = {}
     target_desc_map = {}  # did -> (cid, term) เฉพาะของ target_vet_cids
@@ -609,7 +743,6 @@ def read_sct_archive(sct_path, target_vet_cids, vtsl_pref_dids, vsct_us_pref_did
                         elif dtype == SYN_TYPE:
                             if term not in rec['synonyms']:
                                 rec['synonyms'].append(term)
-                            # เช็คว่า Description ID นี้อยู่ใน VSCT Language Refset หรือไม่ (เช่น Bladder stone 117363016)
                             if did in vtsl_pref_dids:
                                 rec['vtsl_pref'] = term
                             elif did in vsct_us_pref_dids and not rec['us_pref']:
@@ -686,7 +819,6 @@ def read_sct_archive(sct_path, target_vet_cids, vtsl_pref_dids, vsct_us_pref_did
 def build_body_system_resolver(fsn_map, vet_parents, vet_fs, vet_ps, inter_parents, inter_fs, inter_ps):
     body_map = dict(BODY_SYSTEM_MAP)
 
-    # เพิ่ม children ของ Body system structure (280115004)
     for src_cid, p_set in inter_parents.items():
         if '280115004' in p_set and src_cid not in body_map:
             raw_fsn = fsn_map.get(src_cid, '')
@@ -760,12 +892,12 @@ def build_body_system_resolver(fsn_map, vet_parents, vet_fs, vet_ps, inter_paren
 def build():
     t0 = time.time()
     log('=' * 68)
-    log('KAHIS Terminology Database Builder v6.0 (Update-Safe Master Engine)')
+    log('KAHIS Terminology Database Builder v7.0 (3-Source + KU Versioned Engine)')
     log('=' * 68)
 
     sapdt_file, vsct_src, sct_src = find_sources()
     if not sapdt_file:
-        log('ไม่พบไฟล์ SA-PDTReleaseFile_full_*.txt! ยกเลิกการทำงาน', 'ERROR')
+        log('ไม่พบไฟล์ SA-PDTReleaseFile_full_*.txt หรือ .xml! ยกเลิกการทำงาน', 'ERROR')
         sys.exit(1)
     if not vsct_src:
         log('ไม่พบโฟลเดอร์หรือไฟล์ซิป SnomedCT_VETExtension_*! ยกเลิกการทำงาน', 'ERROR')
@@ -774,21 +906,32 @@ def build():
         log('ไม่พบโฟลเดอร์หรือไฟล์ซิป SnomedCT_InternationalRF2_*! ยกเลิกการทำงาน', 'ERROR')
         sys.exit(1)
 
-    log(f'แหล่งที่ 1 (SA-PDT) : {sapdt_file}')
-    log(f'แหล่งที่ 2 (VSCT)   : {vsct_src}')
-    log(f'แหล่งที่ 3 (SCT-Int): {sct_src}')
+    ku_src, sapdt_delta_file = find_extra_sources(sapdt_file)
+
+    sapdt_ver = extract_release_date(sapdt_file, '20260930')
+    vsct_ver  = extract_release_date(vsct_src, '20260930')
+    sct_ver   = extract_release_date(sct_src, '20261101')
+    ku_ver    = extract_release_date(ku_src, time.strftime('%Y%m%d'))
+
+    log(f'แหล่งที่ 1 (SA-PDT {sapdt_ver}) : {sapdt_file}')
+    if sapdt_delta_file:
+        log(f'  └── ไฟล์ Changes (Delta)     : {sapdt_delta_file}')
+    log(f'แหล่งที่ 2 (VSCT {vsct_ver})   : {vsct_src}')
+    log(f'แหล่งที่ 3 (SCT {sct_ver})     : {sct_src}')
+    log(f'แหล่งที่ 4 (KU {ku_ver})       : {ku_src or "ku_custom_synonyms.csv"}')
 
     if DRY_RUN:
-        log('โหมด DRY-RUN: ตรวจพบแหล่งข้อมูลครบทั้ง 3 แหล่ง พร้อมสำหรับการสร้างฐานข้อมูล', 'INFO')
+        log('โหมด DRY-RUN: ตรวจพบแหล่งข้อมูลครบทั้ง 4 แหล่ง พร้อมสำหรับการสร้างฐานข้อมูล', 'INFO')
         return
 
     # --- Step 0: Backup & Extract Custom Data ---
     log('Step 0/6: สำรองฐานข้อมูลเดิม และดึงข้อมูล ku_synonym_text / Custom Concepts...')
-    ku_synonyms_map, old_terms_map, custom_rows = backup_and_extract_existing()
+    ku_synonyms_map, old_terms_map, custom_rows = backup_and_extract_existing(ku_src)
 
-    # --- Step 1: Read SA-PDT ---
-    log('Step 1/6: อ่านข้อมูล SA-PDT...')
-    sapdt_map = read_sapdt_file(sapdt_file)
+    # --- Step 1: Read SA-PDT & Changes ---
+    log('Step 1/6: อ่านข้อมูล SA-PDT และไฟล์ Changes...')
+    sapdt_map         = read_sapdt_file(sapdt_file)
+    sapdt_changes_map = read_sapdt_changes(sapdt_delta_file)
 
     # --- Step 2: Read VSCT ---
     log('Step 2/6: อ่านข้อมูล VSCT (5 Snapshot Files)...')
@@ -797,7 +940,7 @@ def build():
         vsct_assoc, vsct_rels, vet_parents, vet_fs, vet_ps
     ) = read_vsct_archive(vsct_src)
 
-    # Target Veterinary Concept Universe (42,299 concepts)
+    # Target Veterinary Concept Universe (SA-PDT ∪ VSCT Conc ∪ VSCT Desc)
     target_vet_cids = set(sapdt_map.keys()) | set(vsct_concs.keys()) | set(vsct_descs.keys())
     log(f'  รวม Concept สัตวแพทย์เป้าหมายทั้งหมด (SA-PDT ∪ VSCT Conc ∪ VSCT Desc): {len(target_vet_cids):,} รหัส')
 
@@ -814,7 +957,7 @@ def build():
         if vd.get('fsn'):
             combined_fsn_map[cid] = vd['fsn']
 
-    # --- Step 4: Merge & Resolve All 42,299 Concepts ---
+    # --- Step 4: Merge & Resolve All Concepts ---
     log('Step 4/6: ประมวลผลคัดเลือก Display Name, FSN, Synonyms, Body System และ Replacement IDs...')
     resolve_body_sys = build_body_system_resolver(
         combined_fsn_map, vet_parents, vet_fs, vet_ps, inter_parents, inter_fs, inter_ps
@@ -848,7 +991,6 @@ def build():
         )
         sem_type   = extract_sem_tag(snomed_fsn)
         if not sem_type:
-            # กรณีรหัสที่ถูกยกเลิกใน VSCT ยุคแรกไม่มีวงเล็บต่อท้าย FSN (เช่น ชื่อวิทยาศาสตร์ของนกแก้ว 6 รหัส)
             for pid in (vet_parents.get(cid, set()) | inter_parents.get(cid, set())):
                 p_sem = extract_sem_tag(combined_fsn_map.get(pid, ''))
                 if p_sem:
@@ -920,7 +1062,7 @@ def build():
             'in_sct_inter':             in_sct_inter,
             'sapdt_concept_id':         cid if in_sapdt == 'Yes' else '',
             'sapdt_status':             s_info['status'] if s_info else '',
-            'sapdt_change_type':        '',
+            'sapdt_change_type':        sapdt_changes_map.get(cid, ''),
             'sapdt_description_id':     ' | '.join(s_info['desc_ids']) if s_info else '',
             'sapdt_fsn':                sapdt_pref if s_info else '',
             'sapdt_preferred':          sapdt_pref,
@@ -943,7 +1085,7 @@ def build():
             'replacement_concept_id':   repl_cid,
             'match_confidence':         'Exact',
             'updated_at':               today_str,
-            'updated_by':               'system_rebuild_v6',
+            'updated_by':               'system_rebuild_v7',
             'created_at':               now_str,
         }
 
@@ -1047,6 +1189,12 @@ def build():
         created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
 
+    # 5.5 สร้างตาราง db_metadata สำหรับฝังเลขเวอร์ชันของทั้ง 4 แหล่งไว้ในตัวไฟล์ SQLite
+    cur.execute('''CREATE TABLE db_metadata (
+        meta_key   TEXT PRIMARY KEY,
+        meta_value TEXT
+    )''')
+
     # Insert terms (ทั้งรายการมาตรฐาน + Custom Concepts ที่สร้างเอง)
     all_term_dicts = list(merged_records.values()) + custom_rows
     term_tuples = [
@@ -1080,7 +1228,7 @@ def build():
             r.get('replacement_concept_id', ''),
             r.get('match_confidence', ''),
             r.get('updated_at', today_str),
-            r.get('updated_by', 'system_rebuild_v6'),
+            r.get('updated_by', 'system_rebuild_v7'),
             r.get('created_at', now_str),
         )
         for r in all_term_dicts
@@ -1144,16 +1292,49 @@ def build():
         )
     log(f'  บันทึกตาราง ku_synonym_text สำเร็จ: {len(ku_rows_list):,} แถว')
 
-    # Sync กลับไปที่ไฟล์ ku_custom_synonyms.csv เพื่อความปลอดภัยสูงสุด
+    # Insert db_metadata
+    release_tag = f'SAPDT{sapdt_ver}_VSCT{vsct_ver}_SCT{sct_ver}_KU{ku_ver}'
+    meta_entries = [
+        ('sapdt_version', sapdt_ver),
+        ('vsct_version',  vsct_ver),
+        ('sct_version',   sct_ver),
+        ('ku_version',    ku_ver),
+        ('sapdt_badge',   f'SA-PDT {sapdt_ver}'),
+        ('vsct_badge',    f'VSCT {vsct_ver}'),
+        ('sct_badge',     f'SCT {sct_ver}'),
+        ('ku_badge',      f'KU {ku_ver}'),
+        ('release_tag',   release_tag),
+        ('built_at',      now_str),
+        ('sapdt_file',    os.path.basename(sapdt_file)),
+        ('vsct_file',     os.path.basename(vsct_src)),
+        ('sct_file',      os.path.basename(sct_src)),
+        ('ku_file',       os.path.basename(ku_src) if ku_src else f'ku_synonym_text_{ku_ver}.csv'),
+    ]
+    cur.executemany('INSERT OR REPLACE INTO db_metadata VALUES (?,?)', meta_entries)
+    log(f'  บันทึกตาราง db_metadata สำเร็จ: {release_tag}')
+
+    # Sync กลับไปที่ไฟล์ ku_custom_synonyms.csv และ sources/4_KU-Custom/ku_synonym_text_<ku_ver>.csv
     try:
-        ku_csv_out = os.path.join(APP_DIR, 'ku_custom_synonyms.csv')
-        with open(ku_csv_out, 'w', encoding='utf-8', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['concept_id', 'ku_synonym_text', 'lang_tag'])
-            for (cid, text, lang, _) in ku_rows_list:
-                writer.writerow([cid, text, lang])
+        ku_dir_out = os.path.join(SOURCES_DIR, '4_KU-Custom')
+        arch_data_dir = os.path.join(APP_DIR, 'archive', 'legacy_data')
+        os.makedirs(ku_dir_out, exist_ok=True)
+        os.makedirs(arch_data_dir, exist_ok=True)
+        target_ku_csv = os.path.join(ku_dir_out, f'ku_synonym_text_{ku_ver}.csv')
+        for old_c in glob.glob(os.path.join(ku_dir_out, 'ku_synonym_text_*.csv')):
+            if os.path.abspath(old_c) != os.path.abspath(target_ku_csv):
+                dst_c = os.path.join(arch_data_dir, os.path.basename(old_c))
+                if os.path.exists(dst_c):
+                    os.remove(dst_c)
+                shutil.move(old_c, dst_c)
+        ku_csv_targets = [target_ku_csv]
+        for ku_csv_out in ku_csv_targets:
+            with open(ku_csv_out, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['concept_id', 'ku_synonym_text', 'lang_tag'])
+                for (cid, text, lang, _) in ku_rows_list:
+                    writer.writerow([cid, text, lang])
     except Exception as e:
-        log(f'  ไม่สามารถอัปเดตไฟล์ ku_custom_synonyms.csv: {e}', 'WARN')
+        log(f'  ไม่สามารถอัปเดตไฟล์ ku_synonym_text CSV: {e}', 'WARN')
 
     # สร้าง Indexes และ FTS5
     log('Step 6/6: สร้าง Indexes, FTS5 Search Index และบีบอัดไฟล์ .db.gz...')
@@ -1180,13 +1361,37 @@ def build():
     cur.execute('PRAGMA optimize;')
     conn.close()
 
-    # Atomic Replace
-    if os.path.exists(DB_OUT):
-        os.replace(DB_TEMP, DB_OUT)
-    else:
-        os.rename(DB_TEMP, DB_OUT)
+    # Atomic Replace (with Windows PermissionError fallback via SQLite backup/copyfile)
+    try:
+        if os.path.exists(DB_OUT):
+            os.replace(DB_TEMP, DB_OUT)
+        else:
+            os.rename(DB_TEMP, DB_OUT)
+    except PermissionError:
+        try:
+            shutil.copyfile(DB_TEMP, DB_OUT)
+            os.remove(DB_TEMP)
+        except PermissionError:
+            src_conn = sqlite3.connect(DB_TEMP)
+            dst_conn = sqlite3.connect(DB_OUT)
+            src_conn.backup(dst_conn)
+            dst_conn.close()
+            src_conn.close()
+            try:
+                os.remove(DB_TEMP)
+            except OSError:
+                pass
 
     db_size_mb = os.path.getsize(DB_OUT) / (1024 * 1024)
+
+    # บันทึกสำเนาแยกตามเวอร์ชันไว้ในโฟลเดอร์ releases/
+    os.makedirs(RELEASES_DIR, exist_ok=True)
+    rel_db_path = os.path.join(RELEASES_DIR, f'kahis_{release_tag}.db')
+    try:
+        shutil.copy2(DB_OUT, rel_db_path)
+        log(f'  บันทึกไฟล์ฐานข้อมูลประจำรุ่นไว้ที่: releases/{os.path.basename(rel_db_path)}')
+    except Exception as e:
+        log(f'  ไม่สามารถคัดลอกไปไว้ที่ releases/: {e}', 'WARN')
 
     # Auto Compress to .gz
     gz_out = DB_OUT + '.gz'
@@ -1200,7 +1405,9 @@ def build():
     log('')
     log('=' * 68)
     log(f'✅ สร้างฐานข้อมูลสำเร็จสมบูรณ์ในเวลา {elapsed:.1f} วินาที')
+    log(f'   รุ่นฐานข้อมูล  : SA-PDT {sapdt_ver} | VSCT {vsct_ver} | SCT {sct_ver} | KU {ku_ver}')
     log(f'   ไฟล์ฐานข้อมูล : {DB_OUT} ({db_size_mb:.1f} MB)')
+    log(f'   ไฟล์คลังรุ่น   : {rel_db_path}')
     log(f'   ไฟล์บีบอัด    : {gz_out} ({gz_size_mb:.1f} MB)')
     log(f'   จำนวนข้อมูล   : terms={len(term_tuples):,} | relationships={rel_count:,} | concept_terms={ct_count:,} | ku={len(ku_rows_list):,}')
     log('=' * 68)
