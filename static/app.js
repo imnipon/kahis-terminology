@@ -27,7 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('[Firebase] Initialization notice:', e);
     }
 
-    // In-Browser SQLite WASM Engine (sql.js)
+    // Environment & In-Browser SQLite WASM Engine (sql.js)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     let localDbInstance = null;
     let sqlModule = null;
 
@@ -44,6 +45,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const dbStatusPill     = document.getElementById('dbStatusPill');
     const dbStatusLabel    = document.getElementById('dbStatusLabel');
     const btnResetServerDb = document.getElementById('btnResetServerDb');
+
+    // If running in hosted environment (Firebase), indicate Client WASM mode
+    if (!isLocalhost && dbStatusLabel && dbStatusPill) {
+        dbStatusLabel.textContent = 'Client WASM Mode';
+        dbStatusPill.className = 'db-status-pill online';
+        dbStatusPill.style.background = '#eff6ff';
+        dbStatusPill.style.color = '#1d4ed8';
+        dbStatusPill.style.borderColor = '#bfdbfe';
+    }
 
     if (localDbFileInput) {
         localDbFileInput.addEventListener('change', async (e) => {
@@ -781,8 +791,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 9. API Functions & Dynamic Filters Setup
     async function initFiltersAndVersions() {
+        if (!isLocalhost) {
+            // In hosted environment, use standard release metadata directly
+            if (badgeSapdt) badgeSapdt.textContent = 'SA-PDT 20260930';
+            if (badgeVsct)  badgeVsct.textContent  = 'VSCT 20260930';
+            if (badgeSct)   badgeSct.textContent   = 'SCT 20261101';
+            if (badgeKu)    badgeKu.textContent    = 'KU 20261106';
+            return;
+        }
         try {
             const res = await fetch('/api/filters');
+            const cType = res.headers.get('content-type') || '';
+            if (!res.ok || !cType.includes('application/json')) return;
             const data = await res.json();
 
             if (data.release_versions) {
@@ -792,7 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (badgeKu)    badgeKu.textContent    = data.release_versions.ku    || 'KU 20261106';
             }
         } catch (err) {
-            console.error('Failed to load filters:', err);
+            console.warn('Server filters API not available:', err.message);
         }
     }
 
@@ -849,6 +869,26 @@ document.addEventListener('DOMContentLoaded', () => {
             totalResults = 0;
             matchCountBar.textContent = '0 matches found in 0.00 seconds.';
             resultsTableBody.innerHTML = '<tr><td colspan="2" class="empty-msg">No matches found (all semantic filters unchecked)</td></tr>';
+            updateSemanticCountBadges({});
+            updatePagination();
+            return;
+        }
+
+        // Hosted Mode Check: If on Firebase Hosting without a loaded local SQLite DB file
+        if (!localDbInstance && !isLocalhost) {
+            totalResults = 0;
+            matchCountBar.textContent = 'กรุณากด "📂 โหลดไฟล์ DB จากเครื่อง" เพื่อค้นหา';
+            resultsTableBody.innerHTML = `
+                <tr>
+                    <td colspan="2" class="empty-msg" style="padding:45px 15px; text-align:center;">
+                        <div style="font-size:32px; margin-bottom:8px;">📂</div>
+                        <strong style="font-size:14px; color:#1e293b;">โหมดเว็บแอปออนไลน์ (Client-Side WASM)</strong><br>
+                        <span style="font-size:12px; color:#64748b; display:inline-block; margin-top:6px; line-height:1.5; max-width:330px;">
+                            กรุณากดปุ่ม <strong style="color:#1d4ed8;">"📂 โหลดไฟล์ DB จากเครื่อง"</strong> ที่มุมขวาบน<br>
+                            เพื่อเลือกไฟล์ <code>terminology_search.db</code> จากคอมพิวเตอร์ของท่าน
+                        </span>
+                    </td>
+                </tr>`;
             updateSemanticCountBadges({});
             updatePagination();
             return;
@@ -938,6 +978,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`/api/search?${params}`);
+            const cType = res.headers.get('content-type') || '';
+            if (!res.ok || !cType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
             const data = await res.json();
 
             totalResults = data.total;
@@ -1082,7 +1126,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`/api/concept/${conceptId}`);
-            if (!res.ok) throw new Error('Concept not found');
+            const cType = res.headers.get('content-type') || '';
+            if (!res.ok || !cType.includes('application/json')) {
+                throw new Error('Concept not found or non-JSON response');
+            }
 
             const data = await res.json();
             currentConceptData = data;
